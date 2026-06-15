@@ -9,19 +9,59 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WalletRouteImport } from './routes/wallet'
+import { Route as TicketsRouteImport } from './routes/tickets'
+import { Route as SupportRouteImport } from './routes/support'
+import { Route as ShopRouteImport } from './routes/shop'
+import { Route as SellRouteImport } from './routes/sell'
 import { Route as PremiumRouteImport } from './routes/premium'
+import { Route as PointsRouteImport } from './routes/points'
 import { Route as ExecutorsRouteImport } from './routes/executors'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as CommunityRouteImport } from './routes/community'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ScriptsIndexRouteImport } from './routes/scripts.index'
+import { Route as MarketIndexRouteImport } from './routes/market.index'
 import { Route as ScriptsSlugRouteImport } from './routes/scripts.$slug'
 import { Route as OrdersIdRouteImport } from './routes/orders.$id'
+import { Route as MarketSlugRouteImport } from './routes/market.$slug'
+import { Route as MarketOrdersIdRouteImport } from './routes/market.orders.$id'
 
+const WalletRoute = WalletRouteImport.update({
+  id: '/wallet',
+  path: '/wallet',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TicketsRoute = TicketsRouteImport.update({
+  id: '/tickets',
+  path: '/tickets',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SupportRoute = SupportRouteImport.update({
+  id: '/support',
+  path: '/support',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShopRoute = ShopRouteImport.update({
+  id: '/shop',
+  path: '/shop',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SellRoute = SellRouteImport.update({
+  id: '/sell',
+  path: '/sell',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PremiumRoute = PremiumRouteImport.update({
   id: '/premium',
   path: '/premium',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PointsRoute = PointsRouteImport.update({
+  id: '/points',
+  path: '/points',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ExecutorsRoute = ExecutorsRouteImport.update({
@@ -32,6 +72,11 @@ const ExecutorsRoute = ExecutorsRouteImport.update({
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommunityRoute = CommunityRouteImport.update({
+  id: '/community',
+  path: '/community',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -54,6 +99,11 @@ const ScriptsIndexRoute = ScriptsIndexRouteImport.update({
   path: '/scripts/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MarketIndexRoute = MarketIndexRouteImport.update({
+  id: '/market/',
+  path: '/market/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ScriptsSlugRoute = ScriptsSlugRouteImport.update({
   id: '/scripts/$slug',
   path: '/scripts/$slug',
@@ -64,40 +114,80 @@ const OrdersIdRoute = OrdersIdRouteImport.update({
   path: '/orders/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MarketSlugRoute = MarketSlugRouteImport.update({
+  id: '/market/$slug',
+  path: '/market/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketOrdersIdRoute = MarketOrdersIdRouteImport.update({
+  id: '/market/orders/$id',
+  path: '/market/orders/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
+  '/community': typeof CommunityRoute
   '/dashboard': typeof DashboardRoute
   '/executors': typeof ExecutorsRoute
+  '/points': typeof PointsRoute
   '/premium': typeof PremiumRoute
+  '/sell': typeof SellRoute
+  '/shop': typeof ShopRoute
+  '/support': typeof SupportRoute
+  '/tickets': typeof TicketsRoute
+  '/wallet': typeof WalletRoute
+  '/market/$slug': typeof MarketSlugRoute
   '/orders/$id': typeof OrdersIdRoute
   '/scripts/$slug': typeof ScriptsSlugRoute
+  '/market/': typeof MarketIndexRoute
   '/scripts/': typeof ScriptsIndexRoute
+  '/market/orders/$id': typeof MarketOrdersIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
+  '/community': typeof CommunityRoute
   '/dashboard': typeof DashboardRoute
   '/executors': typeof ExecutorsRoute
+  '/points': typeof PointsRoute
   '/premium': typeof PremiumRoute
+  '/sell': typeof SellRoute
+  '/shop': typeof ShopRoute
+  '/support': typeof SupportRoute
+  '/tickets': typeof TicketsRoute
+  '/wallet': typeof WalletRoute
+  '/market/$slug': typeof MarketSlugRoute
   '/orders/$id': typeof OrdersIdRoute
   '/scripts/$slug': typeof ScriptsSlugRoute
+  '/market': typeof MarketIndexRoute
   '/scripts': typeof ScriptsIndexRoute
+  '/market/orders/$id': typeof MarketOrdersIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
+  '/community': typeof CommunityRoute
   '/dashboard': typeof DashboardRoute
   '/executors': typeof ExecutorsRoute
+  '/points': typeof PointsRoute
   '/premium': typeof PremiumRoute
+  '/sell': typeof SellRoute
+  '/shop': typeof ShopRoute
+  '/support': typeof SupportRoute
+  '/tickets': typeof TicketsRoute
+  '/wallet': typeof WalletRoute
+  '/market/$slug': typeof MarketSlugRoute
   '/orders/$id': typeof OrdersIdRoute
   '/scripts/$slug': typeof ScriptsSlugRoute
+  '/market/': typeof MarketIndexRoute
   '/scripts/': typeof ScriptsIndexRoute
+  '/market/orders/$id': typeof MarketOrdersIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -105,55 +195,137 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/auth'
+    | '/community'
     | '/dashboard'
     | '/executors'
+    | '/points'
     | '/premium'
+    | '/sell'
+    | '/shop'
+    | '/support'
+    | '/tickets'
+    | '/wallet'
+    | '/market/$slug'
     | '/orders/$id'
     | '/scripts/$slug'
+    | '/market/'
     | '/scripts/'
+    | '/market/orders/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/admin'
     | '/auth'
+    | '/community'
     | '/dashboard'
     | '/executors'
+    | '/points'
     | '/premium'
+    | '/sell'
+    | '/shop'
+    | '/support'
+    | '/tickets'
+    | '/wallet'
+    | '/market/$slug'
     | '/orders/$id'
     | '/scripts/$slug'
+    | '/market'
     | '/scripts'
+    | '/market/orders/$id'
   id:
     | '__root__'
     | '/'
     | '/admin'
     | '/auth'
+    | '/community'
     | '/dashboard'
     | '/executors'
+    | '/points'
     | '/premium'
+    | '/sell'
+    | '/shop'
+    | '/support'
+    | '/tickets'
+    | '/wallet'
+    | '/market/$slug'
     | '/orders/$id'
     | '/scripts/$slug'
+    | '/market/'
     | '/scripts/'
+    | '/market/orders/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   AuthRoute: typeof AuthRoute
+  CommunityRoute: typeof CommunityRoute
   DashboardRoute: typeof DashboardRoute
   ExecutorsRoute: typeof ExecutorsRoute
+  PointsRoute: typeof PointsRoute
   PremiumRoute: typeof PremiumRoute
+  SellRoute: typeof SellRoute
+  ShopRoute: typeof ShopRoute
+  SupportRoute: typeof SupportRoute
+  TicketsRoute: typeof TicketsRoute
+  WalletRoute: typeof WalletRoute
+  MarketSlugRoute: typeof MarketSlugRoute
   OrdersIdRoute: typeof OrdersIdRoute
   ScriptsSlugRoute: typeof ScriptsSlugRoute
+  MarketIndexRoute: typeof MarketIndexRoute
   ScriptsIndexRoute: typeof ScriptsIndexRoute
+  MarketOrdersIdRoute: typeof MarketOrdersIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/wallet': {
+      id: '/wallet'
+      path: '/wallet'
+      fullPath: '/wallet'
+      preLoaderRoute: typeof WalletRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tickets': {
+      id: '/tickets'
+      path: '/tickets'
+      fullPath: '/tickets'
+      preLoaderRoute: typeof TicketsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/support': {
+      id: '/support'
+      path: '/support'
+      fullPath: '/support'
+      preLoaderRoute: typeof SupportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/shop': {
+      id: '/shop'
+      path: '/shop'
+      fullPath: '/shop'
+      preLoaderRoute: typeof ShopRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sell': {
+      id: '/sell'
+      path: '/sell'
+      fullPath: '/sell'
+      preLoaderRoute: typeof SellRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/premium': {
       id: '/premium'
       path: '/premium'
       fullPath: '/premium'
       preLoaderRoute: typeof PremiumRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/points': {
+      id: '/points'
+      path: '/points'
+      fullPath: '/points'
+      preLoaderRoute: typeof PointsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/executors': {
@@ -168,6 +340,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/community': {
+      id: '/community'
+      path: '/community'
+      fullPath: '/community'
+      preLoaderRoute: typeof CommunityRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -198,6 +377,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ScriptsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/market/': {
+      id: '/market/'
+      path: '/market'
+      fullPath: '/market/'
+      preLoaderRoute: typeof MarketIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/scripts/$slug': {
       id: '/scripts/$slug'
       path: '/scripts/$slug'
@@ -212,6 +398,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrdersIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/market/$slug': {
+      id: '/market/$slug'
+      path: '/market/$slug'
+      fullPath: '/market/$slug'
+      preLoaderRoute: typeof MarketSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/market/orders/$id': {
+      id: '/market/orders/$id'
+      path: '/market/orders/$id'
+      fullPath: '/market/orders/$id'
+      preLoaderRoute: typeof MarketOrdersIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -219,12 +419,22 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   AuthRoute: AuthRoute,
+  CommunityRoute: CommunityRoute,
   DashboardRoute: DashboardRoute,
   ExecutorsRoute: ExecutorsRoute,
+  PointsRoute: PointsRoute,
   PremiumRoute: PremiumRoute,
+  SellRoute: SellRoute,
+  ShopRoute: ShopRoute,
+  SupportRoute: SupportRoute,
+  TicketsRoute: TicketsRoute,
+  WalletRoute: WalletRoute,
+  MarketSlugRoute: MarketSlugRoute,
   OrdersIdRoute: OrdersIdRoute,
   ScriptsSlugRoute: ScriptsSlugRoute,
+  MarketIndexRoute: MarketIndexRoute,
   ScriptsIndexRoute: ScriptsIndexRoute,
+  MarketOrdersIdRoute: MarketOrdersIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -4,31 +4,42 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageShell } from "@/components/site/PageShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowRight, Code2, Cpu, Crown, ShieldCheck, Sparkles, Zap } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ArrowRight, Code2, Cpu, Crown, ShieldCheck, Zap, ShoppingBag, BadgeCheck, Star, Users, Store, MessageCircle, Sparkles, Gamepad2, Disc, Gift, TrendingUp, Trophy, Globe } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Kyron Scipts – Scripts Premium para Roblox" },
-      { name: "description", content: "Biblioteca premium de scripts, executores e ferramentas para Roblox. Cópia rápida, sempre atualizado." },
+      { title: "BuxHub – Ecossistema Roblox Completo" },
+      { name: "description", content: "Biblioteca de scripts, marketplace, executores e comunidade Roblox. Tudo em um só lugar." },
     ],
   }),
   component: Home,
 });
 
 function Home() {
-  const { user, isPremium } = useAuth();
+  const { user, isPremium, loading } = useAuth();
+
   const { data: stats } = useQuery({
-    queryKey: ["home-stats"],
+    queryKey: ["home-ecosystem-stats"],
     queryFn: async () => {
-      const [s, e, u] = await Promise.all([
+      const [s, e, u, l, sp, p] = await Promise.all([
         supabase.from("scripts").select("*", { count: "exact", head: true }),
         supabase.from("executors").select("*", { count: "exact", head: true }),
         supabase.from("profiles").select("*", { count: "exact", head: true }),
+        supabase.from("listings").select("*", { count: "exact", head: true }).eq("status", "active"),
+        supabase.from("seller_profiles").select("*", { count: "exact", head: true }).eq("verified", true),
+        supabase.from("marketplace_orders").select("*", { count: "exact", head: true }).neq("status", "cancelled"),
       ]);
-      return { scripts: s.count ?? 0, executors: e.count ?? 0, users: u.count ?? 0 };
+      return {
+        scripts: s.count ?? 0,
+        executors: e.count ?? 0,
+        users: u.count ?? 0,
+        listings: l.count ?? 0,
+        sellers: sp.count ?? 0,
+        sales: p.count ?? 0,
+      };
     },
   });
 
@@ -37,67 +48,122 @@ function Home() {
     queryFn: async () => {
       const { data } = await supabase
         .from("scripts")
-        .select("id, slug, title, description, game_name, thumbnail_url, is_premium, is_verified, views")
+        .select("*")
         .order("created_at", { ascending: false })
         .limit(6);
+      return (data ?? []) as Array<{
+        id: string; slug: string; title: string; description: string | null;
+        game_name: string | null; thumbnail_url: string | null;
+        is_premium: boolean; is_verified: boolean; views: number;
+      }>;
+    },
+  });
+
+  const { data: communityNews } = useQuery({
+    queryKey: ["home-community-news"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("announcements")
+        .select("*")
+        .eq("active", true)
+        .order("created_at", { ascending: false })
+        .limit(3);
       return data ?? [];
     },
   });
 
+  const globalMetrics = [
+    { label: "Scripts Disponíveis", value: stats?.scripts ?? "—", icon: Code2 },
+    { label: "Executores", value: stats?.executors ?? "—", icon: Cpu },
+    { label: "Usuários Registrados", value: stats?.users ?? "—", icon: Users },
+    { label: "Vendas Realizadas", value: stats?.sales ?? "—", icon: TrendingUp },
+    { label: "Anúncios Ativos", value: stats?.listings ?? "—", icon: ShoppingBag },
+    { label: "Vendedores Verificados", value: stats?.sellers ?? "—", icon: BadgeCheck },
+  ];
+
   return (
     <PageShell>
-      {/* Hero */}
+      {/* === BANNER PRINCIPAL - ECOSSISTEMA === */}
       <section className="relative overflow-hidden">
         <div className="mx-auto max-w-7xl px-4 pt-20 pb-16 text-center">
           <div className="inline-flex items-center gap-2 rounded-full glass px-3 py-1 text-xs mb-6">
-            <Sparkles className="h-3 w-3 text-primary" />
-            <span>Novos scripts diariamente</span>
+            <Globe className="h-3 w-3 text-primary" />
+            <span>Ecossistema Roblox completo</span>
           </div>
           <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight">
-            A maior biblioteca de <br />
-            <span className="text-gradient-brand">scripts Roblox</span>
+            A Plataforma Roblox <br />
+            <span className="text-gradient-brand">Tudo-em-Um</span>
           </h1>
-          <p className="mt-6 max-w-2xl mx-auto text-lg text-muted-foreground">
-            Milhares de scripts verificados, executores premium e ferramentas para todos os jogos populares. Tudo em um só lugar.
+          <p className="mt-6 max-w-3xl mx-auto text-lg text-muted-foreground">
+            Biblioteca de scripts, marketplace, executores e comunidade — tudo integrado em um único ecossistema criado para a comunidade Roblox.
           </p>
+
+          {/* === AÇÕES PRINCIPAIS === */}
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Button asChild size="lg" className="bg-gradient-to-r from-primary to-accent text-white border-0 glow-brand">
-              <Link to="/scripts">Explorar scripts <ArrowRight className="h-4 w-4" /></Link>
+              <Link to="/scripts">Explorar Scripts <ArrowRight className="h-4 w-4" /></Link>
             </Button>
-            <Button asChild size="lg" variant="outline"><Link to="/premium"><Crown className="h-4 w-4" /> Ver Premium</Link></Button>
+            <Button asChild size="lg" variant="outline">
+              <Link to="/market"><ShoppingBag className="h-4 w-4" /> Marketplace</Link>
+            </Button>
+            <Button asChild size="lg" variant="outline">
+              <Link to="/community"><MessageCircle className="h-4 w-4" /> Comunidade</Link>
+            </Button>
           </div>
 
-          <div className="mt-14 grid grid-cols-3 max-w-2xl mx-auto gap-4">
-            {[
-              { label: "Scripts", value: stats?.scripts ?? "—" },
-              { label: "Executores", value: stats?.executors ?? "—" },
-              { label: "Usuários", value: stats?.users ?? "—" },
-            ].map((s) => (
-              <div key={s.label} className="glass rounded-xl p-4">
-                <div className="text-2xl font-bold text-gradient-brand">{s.value}</div>
-                <div className="text-xs uppercase tracking-wider text-muted-foreground mt-1">{s.label}</div>
+          {/* === MÉTRICAS GLOBAIS === */}
+          <div className="mt-14 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 max-w-6xl mx-auto gap-3">
+            {globalMetrics.map((m) => (
+              <div key={m.label} className="glass rounded-xl p-3 text-center">
+                <m.icon className="h-4 w-4 mx-auto text-primary mb-1" />
+                <div className="text-xl font-bold text-gradient-brand">{m.value}</div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1">{m.label}</div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Features */}
+      {/* === ECOSYSTEM GRID === */}
       <section className="mx-auto max-w-7xl px-4 py-16">
+        <div className="text-center mb-10">
+          <h2 className="text-3xl md:text-4xl font-bold">Explore o <span className="text-gradient-brand">Ecossistema</span></h2>
+          <p className="text-muted-foreground mt-2 max-w-2xl mx-auto">Tudo que você precisa para Roblox em um só lugar.</p>
+        </div>
+        <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {[
+            { icon: Code2, title: "Scripts", desc: "Milhares de scripts verificados para todos os jogos.", to: "/scripts", color: "from-blue-500/20 to-purple-500/20" },
+            { icon: ShoppingBag, title: "Marketplace", desc: "Compre itens, game passes e serviços com segurança.", to: "/market", color: "from-emerald-500/20 to-teal-500/20" },
+            { icon: Cpu, title: "Executores", desc: "Os melhores executores testados pela equipe.", to: "/executors", color: "from-orange-500/20 to-red-500/20" },
+            { icon: MessageCircle, title: "Comunidade", desc: "Discord, anúncios, eventos e muito mais.", to: "/community", color: "from-indigo-500/20 to-violet-500/20" },
+            { icon: Crown, title: "Premium", desc: "Acesso vitalício a todo o catálogo premium.", to: "/premium", color: "from-yellow-500/20 to-amber-500/20" },
+            { icon: Store, title: "Loja Smiiley", desc: "Troque seus pontos por descontos especiais.", to: "/shop", color: "from-pink-500/20 to-rose-500/20" },
+            { icon: Gift, title: "Sistema de Pontos", desc: "Ganhe pontos comprando e vendendo.", to: "/points", color: "from-cyan-500/20 to-sky-500/20" },
+            { icon: Users, title: "Anúncios", desc: "Divulgue serviços, projetos e equipes.", to: "/community?tab=ads", color: "from-green-500/20 to-lime-500/20" },
+          ].map((item) => (
+            <Link key={item.to} to={item.to} className="group">
+              <Card className="border-white/10 bg-card/50 card-hover h-full overflow-hidden relative">
+                <div className={`absolute inset-0 bg-gradient-to-br ${item.color} opacity-0 group-hover:opacity-100 transition-opacity`} />
+                <CardContent className="p-5 relative z-10">
+                  <div className="grid h-10 w-10 place-items-center rounded-lg bg-gradient-to-br from-primary/20 to-accent/20 mb-3">
+                    <item.icon className="h-5 w-5 text-primary" />
+                  </div>
+                  <h3 className="font-semibold mb-1 group-hover:text-primary transition-colors">{item.title}</h3>
+                  <p className="text-sm text-muted-foreground">{item.desc}</p>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* === FEATURES DESTAQUE === */}
+      <section className="mx-auto max-w-7xl px-4 py-10">
         <div className="grid md:grid-cols-3 gap-6">
           {[
-            { icon: ShieldCheck, title: "Verificados", desc: "Todos os scripts são testados pela nossa equipe antes de serem publicados." },
-            {icon: Zap,title: "Scripts, contas e itens",desc: "Tudo o que você precisa para Roblox, reunido em uma única plataforma."},
-  {
-  icon: Crown,
-  title: "Premium acessível!",
-  desc: (
-    <>
-      Acesso vitalício a todo o catálogo a partir de{" "}
-      <del>R$ 23,50</del> por <strong>R$ 9,90</strong>
-    </>
-  )
-}
+            { icon: ShieldCheck, title: "100% Verificados", desc: "Todos os scripts e vendedores são testados pela nossa equipe antes de serem publicados." },
+            { icon: Zap, title: "Ecossistema Completo", desc: "Scripts, marketplace, executores e comunidade — tudo integrado em uma única plataforma." },
+            { icon: Crown, title: "Premium Acessível", desc: "Acesso vitalício a todo o catálogo premium com pagamento via PIX. A partir de R$ 9,90." },
           ].map((f) => (
             <Card key={f.title} className="border-white/10 bg-card/50 card-hover">
               <CardContent className="p-6">
@@ -112,11 +178,11 @@ function Home() {
         </div>
       </section>
 
-      {/* Featured scripts */}
+      {/* === NOVOS LANÇAMENTOS === */}
       <section className="mx-auto max-w-7xl px-4 py-10">
         <div className="flex items-end justify-between mb-6">
           <div>
-            <h2 className="text-2xl md:text-3xl font-bold">Novos lançamentos</h2>
+            <h2 className="text-2xl md:text-3xl font-bold">Novos Lançamentos</h2>
             <p className="text-sm text-muted-foreground mt-1">Os scripts mais recentes da plataforma</p>
           </div>
           <Button asChild variant="ghost"><Link to="/scripts">Ver todos <ArrowRight className="h-4 w-4" /></Link></Button>
@@ -152,14 +218,113 @@ function Home() {
         </div>
       </section>
 
-      {/* CTA */}
+      {/* === MARKETPLACE SECTION === */}
+      <section className="mx-auto max-w-7xl px-4 py-10">
+        <div className="glass rounded-2xl overflow-hidden">
+          <div className="grid md:grid-cols-2 gap-0">
+            <div className="p-8 md:p-12 flex flex-col justify-center">
+              <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary mb-4 w-fit">
+                <ShoppingBag className="h-3 w-3" /> Marketplace
+              </div>
+              <h2 className="text-3xl md:text-4xl font-bold mb-3">
+                Compre com <span className="text-gradient-brand">segurança</span>
+              </h2>
+              <p className="text-muted-foreground mb-6">
+                Itens Roblox, game passes e serviços de vendedores verificados. Pagamento retido em escrow por 7 dias — só liberamos pro vendedor depois que você confirma que recebeu.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <Button asChild className="bg-gradient-to-r from-primary to-accent text-white border-0">
+                  <Link to="/market">Explorar Marketplace <ArrowRight className="h-4 w-4" /></Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link to="/sell">Vender agora</Link>
+                </Button>
+              </div>
+              <div className="flex items-center gap-6 mt-6 text-sm text-muted-foreground">
+                <span className="flex items-center gap-1"><BadgeCheck className="h-4 w-4 text-primary" /> Vendedores verificados</span>
+                <span className="flex items-center gap-1"><Star className="h-4 w-4 fill-yellow-500 text-yellow-500" /> Avaliações reais</span>
+              </div>
+            </div>
+            <div className="hidden md:flex bg-gradient-to-br from-primary/10 to-accent/10 items-center justify-center p-12">
+              <ShoppingBag className="h-32 w-32 text-primary/30" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* === COMUNIDADE SECTION === */}
+      <section className="mx-auto max-w-7xl px-4 py-10">
+        <div className="glass rounded-2xl overflow-hidden">
+          <div className="grid md:grid-cols-2 gap-0">
+            <div className="hidden md:flex bg-gradient-to-br from-indigo-500/10 to-violet-500/10 items-center justify-center p-12">
+              <Disc className="h-32 w-32 text-indigo-400/30" />
+            </div>
+            <div className="p-8 md:p-12 flex flex-col justify-center">
+              <div className="inline-flex items-center gap-2 rounded-full bg-indigo-500/10 px-3 py-1 text-xs font-semibold text-indigo-400 mb-4 w-fit">
+                <MessageCircle className="h-3 w-3" /> Comunidade
+              </div>
+              <h2 className="text-3xl md:text-4xl font-bold mb-3">
+                Faça parte da <span className="text-gradient-brand">comunidade</span>
+              </h2>
+              <p className="text-muted-foreground mb-6">
+                Participe do nosso Discord, veja anúncios, eventos e novidades. Conecte-se com outros membros da comunidade Roblox.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <Button asChild className="bg-[#5865F2] hover:bg-[#4752C4] text-white border-0">
+                  <a href="https://discord.gg/buxhub" target="_blank" rel="noreferrer"><Disc className="h-4 w-4" /> Discord</a>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link to="/community">Explorar Comunidade <ArrowRight className="h-4 w-4" /></Link>
+                </Button>
+              </div>
+              <div className="flex items-center gap-6 mt-6 text-sm text-muted-foreground">
+                <span className="flex items-center gap-1"><Gamepad2 className="h-4 w-4 text-indigo-400" /> Eventos</span>
+                <span className="flex items-center gap-1"><TrendingUp className="h-4 w-4 text-indigo-400" /> Novidades</span>
+                <span className="flex items-center gap-1"><Users className="h-4 w-4 text-indigo-400" /> Anúncios</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* === LOJA SMIILEY PREVIEW === */}
+      <section className="mx-auto max-w-7xl px-4 py-10">
+        <Card className="border-white/10 bg-card/50 overflow-hidden">
+          <CardContent className="p-8 md:p-12 text-center">
+            <div className="inline-flex items-center gap-2 rounded-full bg-pink-500/10 px-3 py-1 text-xs font-semibold text-pink-400 mb-4">
+              <Gift className="h-3 w-3" /> Loja Oficial
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold mb-3">
+              <span className="text-gradient-brand">Smiiley</span> Store
+            </h2>
+            <p className="text-muted-foreground max-w-2xl mx-auto mb-6">
+              Ganhe pontos comprando e vendendo na plataforma. Troque seus pontos por descontos exclusivos na Loja Oficial Smiiley.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-6 mb-6 text-sm text-muted-foreground">
+              <span className="flex items-center gap-1"><Trophy className="h-4 w-4 text-yellow-500" /> Até 5% de desconto</span>
+              <span className="flex items-center gap-1"><Star className="h-4 w-4 text-pink-500" /> Produtos exclusivos</span>
+              <span className="flex items-center gap-1"><Crown className="h-4 w-4 text-primary" /> Multiplicador Premium</span>
+            </div>
+            <div className="flex flex-wrap justify-center gap-3">
+              <Button asChild className="bg-gradient-to-r from-pink-500 to-rose-500 text-white border-0">
+                <Link to="/shop">Ver Loja <ArrowRight className="h-4 w-4" /></Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link to="/points">Meus Pontos</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* === CTA === */}
       {!user && (
         <section className="mx-auto max-w-7xl px-4 py-16">
           <div className="glass rounded-2xl p-10 text-center relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-accent/10 pointer-events-none" />
             <Cpu className="h-10 w-10 mx-auto mb-4 text-primary relative" />
             <h2 className="text-3xl font-bold mb-3 relative">Pronto pra começar?</h2>
-            <p className="text-muted-foreground max-w-xl mx-auto relative">Cria conta grátis em segundos e explora o catálogo completo.</p>
+            <p className="text-muted-foreground max-w-xl mx-auto relative">Crie sua conta grátis em segundos e explore todo o ecossistema BuxHub.</p>
             <Button asChild size="lg" className="mt-6 bg-gradient-to-r from-primary to-accent text-white border-0 relative">
               <Link to="/auth">Criar conta grátis</Link>
             </Button>

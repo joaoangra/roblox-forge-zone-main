@@ -1,7 +1,7 @@
 import { Link, useRouter } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { Code2, Crown, Cpu, LayoutDashboard, LogOut, Shield, Menu, X } from "lucide-react";
+import { Code2, Crown, Cpu, LayoutDashboard, LogOut, Shield, Menu, X, ShoppingBag, MessageCircle, HelpCircle, Gift, Star } from "lucide-react";
 import { useState } from "react";
 
 export function Header() {
@@ -12,6 +12,8 @@ export function Header() {
   const nav = [
     { to: "/scripts", label: "Scripts", icon: Code2 },
     { to: "/executors", label: "Executores", icon: Cpu },
+    { to: "/market", label: "Marketplace", icon: ShoppingBag },
+    { to: "/community", label: "Comunidade", icon: MessageCircle },
     { to: "/premium", label: "Premium", icon: Crown },
   ];
 
