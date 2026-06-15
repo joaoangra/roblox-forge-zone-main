@@ -10,13 +10,29 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { HelpCircle, MessageCircle, Shield, CreditCard, ShoppingBag, Crown, Bug, AlertTriangle, Plus, Clock } from "lucide-react";
+import {
+  HelpCircle,
+  MessageCircle,
+  Shield,
+  CreditCard,
+  ShoppingBag,
+  Crown,
+  Bug,
+  AlertTriangle,
+  Plus,
+  Clock,
+} from "lucide-react";
 
 export const Route = createFileRoute("/support")({
-  head: () => ({ meta: [
-    { title: "Central de Suporte – BuxHub" },
-    { name: "description", content: "Central de suporte BuxHub. Abra um ticket, tire dúvidas e resolva problemas." },
-  ] }),
+  head: () => ({
+    meta: [
+      { title: "Central de Suporte – BuxHub" },
+      {
+        name: "description",
+        content: "Central de suporte BuxHub. Abra um ticket, tire dúvidas e resolva problemas.",
+      },
+    ],
+  }),
   component: SupportPage,
 });
 
@@ -41,29 +57,55 @@ function SupportPage() {
     queryKey: ["my-tickets", user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data } = await (supabase as any).from("support_tickets").select("*").eq("user_id", user!.id).order("created_at", { ascending: false }).limit(20);
+      const { data } = await (supabase as any)
+        .from("support_tickets")
+        .select("*")
+        .eq("user_id", user!.id)
+        .order("created_at", { ascending: false })
+        .limit(20);
       return (data ?? []) as any[];
     },
   });
 
   async function openTicket() {
-    if (!user) { toast.error("Faça login"); return; }
-    if (!selectedCategory || !subject || !message) { toast.error("Preencha todos os campos"); return; }
+    if (!user) {
+      toast.error("Faça login");
+      return;
+    }
+    if (!selectedCategory || !subject || !message) {
+      toast.error("Preencha todos os campos");
+      return;
+    }
     setSending(true);
     const { error } = await (supabase as any).from("support_tickets").insert({
-      user_id: user.id, category: selectedCategory, subject, message, status: "open",
+      user_id: user.id,
+      category: selectedCategory,
+      subject,
+      message,
+      status: "open",
     });
     setSending(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     toast.success("Ticket aberto! Responderemos em breve.");
-    setSelectedCategory(""); setSubject(""); setMessage("");
+    setSelectedCategory("");
+    setSubject("");
+    setMessage("");
   }
 
   const statusBadge = (status: string) => {
     const map: Record<string, { label: string; cls: string }> = {
       open: { label: "Aberto", cls: "bg-green-500/20 text-green-400 border-green-500/30" },
-      in_progress: { label: "Em andamento", cls: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
-      waiting_user: { label: "Aguardando resposta", cls: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
+      in_progress: {
+        label: "Em andamento",
+        cls: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+      },
+      waiting_user: {
+        label: "Aguardando resposta",
+        cls: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
+      },
       resolved: { label: "Resolvido", cls: "bg-green-500/20 text-green-400 border-green-500/30" },
       closed: { label: "Fechado", cls: "bg-muted text-muted-foreground border-white/10" },
     };
@@ -77,31 +119,43 @@ function SupportPage() {
           <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary mb-4">
             <HelpCircle className="h-3 w-3" /> Suporte
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold">Central de <span className="text-gradient-brand">Suporte</span></h1>
-          <p className="text-muted-foreground mt-3 max-w-2xl mx-auto">Tire dúvidas, resolva problemas e entre em contato com nossa equipe.</p>
+          <h1 className="text-4xl md:text-5xl font-bold">
+            Central de <span className="text-gradient-brand">Suporte</span>
+          </h1>
+          <p className="text-muted-foreground mt-3 max-w-2xl mx-auto">
+            Tire dúvidas, resolva problemas e entre em contato com nossa equipe.
+          </p>
         </div>
 
         <Tabs defaultValue="new">
           <TabsList className="mb-6 flex-wrap h-auto">
-            <TabsTrigger value="new"><Plus className="h-4 w-4" /> Abrir Ticket</TabsTrigger>
-            <TabsTrigger value="my"><Clock className="h-4 w-4" /> Meus Tickets</TabsTrigger>
+            <TabsTrigger value="new">
+              <Plus className="h-4 w-4" /> Abrir Ticket
+            </TabsTrigger>
+            <TabsTrigger value="my">
+              <Clock className="h-4 w-4" /> Meus Tickets
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="new">
             <Card className="border-white/10 bg-card/50 max-w-2xl mx-auto">
               <CardContent className="p-6 space-y-4">
-                <p className="text-sm text-muted-foreground">Escolha a categoria e descreva seu problema. Responderemos o mais rápido possível.</p>
+                <p className="text-sm text-muted-foreground">
+                  Escolha a categoria e descreva seu problema. Responderemos o mais rápido possível.
+                </p>
                 <div>
                   <label className="text-sm font-medium mb-2 block">Categoria</label>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {categories.map((cat) => (
-                      <button key={cat.value}
+                      <button
+                        key={cat.value}
                         onClick={() => setSelectedCategory(cat.value)}
                         className={`flex items-center gap-2 rounded-lg border p-3 text-sm transition-colors text-left ${
                           selectedCategory === cat.value
                             ? "border-primary bg-primary/10 text-primary"
                             : "border-white/10 hover:border-white/30"
-                        }`}>
+                        }`}
+                      >
                         <cat.icon className={`h-4 w-4 ${cat.color}`} />
                         <span>{cat.label}</span>
                       </button>
@@ -110,13 +164,26 @@ function SupportPage() {
                 </div>
                 <div>
                   <label className="text-sm font-medium mb-1 block">Assunto</label>
-                  <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Resumo do problema" />
+                  <Input
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    placeholder="Resumo do problema"
+                  />
                 </div>
                 <div>
                   <label className="text-sm font-medium mb-1 block">Mensagem</label>
-                  <Textarea rows={5} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Descreva detalhadamente seu problema..." />
+                  <Textarea
+                    rows={5}
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder="Descreva detalhadamente seu problema..."
+                  />
                 </div>
-                <Button onClick={openTicket} disabled={sending} className="w-full bg-gradient-to-r from-primary to-accent text-white border-0">
+                <Button
+                  onClick={openTicket}
+                  disabled={sending}
+                  className="w-full bg-gradient-to-r from-primary to-accent text-white border-0"
+                >
                   {sending ? "Enviando..." : "Abrir Ticket"}
                 </Button>
               </CardContent>
@@ -135,10 +202,13 @@ function SupportPage() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <h3 className="font-semibold truncate">{t.subject}</h3>
-                              <span className={`text-xs px-2 py-0.5 rounded-full border ${s.cls}`}>{s.label}</span>
+                              <span className={`text-xs px-2 py-0.5 rounded-full border ${s.cls}`}>
+                                {s.label}
+                              </span>
                             </div>
                             <div className="text-xs text-muted-foreground mt-1">
-                              {categories.find(c => c.value === t.category)?.label ?? t.category} · {new Date(t.created_at).toLocaleString("pt-BR")}
+                              {categories.find((c) => c.value === t.category)?.label ?? t.category}{" "}
+                              · {new Date(t.created_at).toLocaleString("pt-BR")}
                             </div>
                           </div>
                         </div>
@@ -150,7 +220,8 @@ function SupportPage() {
             ) : (
               <Card className="border-dashed border-white/10">
                 <CardContent className="p-16 text-center text-muted-foreground">
-                  <MessageCircle className="h-10 w-10 mx-auto mb-3 opacity-50" />Nenhum ticket ainda. Abra um ticket para receber suporte.
+                  <MessageCircle className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                  Nenhum ticket ainda. Abra um ticket para receber suporte.
                 </CardContent>
               </Card>
             )}

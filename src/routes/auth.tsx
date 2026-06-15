@@ -10,7 +10,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { PageShell } from "@/components/site/PageShell";
 import { toast } from "sonner";
 
-
 const searchSchema = z.object({ mode: z.enum(["signin", "signup"]).optional() });
 
 export const Route = createFileRoute("/auth")({
@@ -36,8 +35,12 @@ function AuthPage() {
     try {
       if (mode === "signup") {
         const { error } = await supabase.auth.signUp({
-          email, password,
-          options: { emailRedirectTo: window.location.origin, data: { username, display_name: username } },
+          email,
+          password,
+          options: {
+            emailRedirectTo: window.location.origin,
+            data: { username, display_name: username },
+          },
         });
         if (error) throw error;
         toast.success("Conta criada! Você já está logado.");
@@ -72,7 +75,9 @@ function AuthPage() {
 
               <h1 className="text-2xl font-bold">{mode === "signin" ? "Entrar" : "Criar conta"}</h1>
               <p className="text-sm text-muted-foreground mt-1">
-                {mode === "signin" ? "Acesse sua conta para continuar" : "Junte-se à plataforma em segundos"}
+                {mode === "signin"
+                  ? "Acesse sua conta para continuar"
+                  : "Junte-se à plataforma em segundos"}
               </p>
             </div>
 
@@ -80,12 +85,28 @@ function AuthPage() {
               {mode === "signup" && (
                 <div>
                   <Label htmlFor="username">Nome de usuário</Label>
-                  <Input id="username" required minLength={3} value={username} onChange={(e) => setUsername(e.target.value)} placeholder="seunick" className="mt-1" />
+                  <Input
+                    id="username"
+                    required
+                    minLength={3}
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="seunick"
+                    className="mt-1"
+                  />
                 </div>
               )}
               <div>
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@email.com" className="mt-1" />
+                <Input
+                  id="email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="voce@email.com"
+                  className="mt-1"
+                />
               </div>
               <div>
                 <Label htmlFor="password">Senha</Label>
@@ -111,20 +132,42 @@ function AuthPage() {
                 </div>
               </div>
 
-              <Button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-primary to-accent text-white border-0">
+              <Button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-primary to-accent text-white border-0"
+              >
                 {loading ? "Aguarde..." : mode === "signin" ? "Entrar" : "Criar conta"}
               </Button>
             </form>
 
             <div className="text-center text-sm text-muted-foreground mt-6">
               {mode === "signin" ? (
-                <>Não tem conta? <button className="text-primary hover:underline" onClick={() => setMode("signup")}>Criar agora</button></>
+                <>
+                  Não tem conta?{" "}
+                  <button
+                    className="text-primary hover:underline"
+                    onClick={() => setMode("signup")}
+                  >
+                    Criar agora
+                  </button>
+                </>
               ) : (
-                <>Já tem conta? <button className="text-primary hover:underline" onClick={() => setMode("signin")}>Entrar</button></>
+                <>
+                  Já tem conta?{" "}
+                  <button
+                    className="text-primary hover:underline"
+                    onClick={() => setMode("signin")}
+                  >
+                    Entrar
+                  </button>
+                </>
               )}
             </div>
             <div className="text-center text-xs text-muted-foreground mt-4">
-              <Link to="/" className="hover:text-foreground">← Voltar ao início</Link>
+              <Link to="/" className="hover:text-foreground">
+                ← Voltar ao início
+              </Link>
             </div>
           </CardContent>
         </Card>

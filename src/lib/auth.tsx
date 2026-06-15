@@ -33,7 +33,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function loadExtras(uid: string) {
     const [{ data: p }, { data: r }] = await Promise.all([
-      supabase.from("profiles").select("id, username, display_name, avatar_url, is_premium, premium_until").eq("id", uid).maybeSingle(),
+      supabase
+        .from("profiles")
+        .select("id, username, display_name, avatar_url, is_premium, premium_until")
+        .eq("id", uid)
+        .maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", uid),
     ]);
     setProfile((p as Profile) ?? null);
@@ -60,12 +64,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  const isPremium = !!(profile?.is_premium && (!profile.premium_until || new Date(profile.premium_until) > new Date())) || isAdmin;
+  const isPremium =
+    !!(
+      profile?.is_premium &&
+      (!profile.premium_until || new Date(profile.premium_until) > new Date())
+    ) || isAdmin;
 
   const value: AuthCtx = {
-    user, session, profile, isAdmin, isPremium, loading,
-    refresh: async () => { if (user) await loadExtras(user.id); },
-    signOut: async () => { await supabase.auth.signOut(); },
+    user,
+    session,
+    profile,
+    isAdmin,
+    isPremium,
+    loading,
+    refresh: async () => {
+      if (user) await loadExtras(user.id);
+    },
+    signOut: async () => {
+      await supabase.auth.signOut();
+    },
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
