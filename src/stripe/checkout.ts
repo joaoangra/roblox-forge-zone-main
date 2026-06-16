@@ -51,7 +51,7 @@ export async function handleCreateCheckoutSession(request: Request) {
     customer: appUser?.stripe_customer_id ?? undefined,
 
     success_url: `${baseUrl}/premium?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${baseUrl}/pricing`,
+    cancel_url: `${baseUrl}/premium?checkout=cancelled`,
 
     client_reference_id: user.id,
 

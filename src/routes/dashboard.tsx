@@ -30,6 +30,7 @@ function Dashboard() {
         await supabase
           .from("premium_orders")
           .select("id, amount_brl, status, created_at, premium_plans(name)")
+          .eq("user_id", user!.id)
           .order("created_at", { ascending: false })
       ).data ?? [],
   });

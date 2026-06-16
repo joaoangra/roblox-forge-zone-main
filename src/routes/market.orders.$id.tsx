@@ -116,7 +116,7 @@ function OrderPage() {
     if (file) {
       const { data, error } = await supabase.storage
         .from("chat-attachments")
-        .upload(`${user.id}/${Date.now()}-${file.name}`, file);
+        .upload(`${user!.id}/${Date.now()}-${file.name}`, file);
       if (error) {
         toast.error(error.message);
         return;
@@ -126,7 +126,7 @@ function OrderPage() {
     }
     await supabase.from("marketplace_chat_messages").insert({
       room_id: room!.id,
-      sender_id: user.id,
+      sender_id: user!.id,
       body: msg || null,
       attachment_url,
       attachment_type,

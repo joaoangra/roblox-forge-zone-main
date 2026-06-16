@@ -180,11 +180,11 @@ async function punishFalseReporter(transactionId: string) {
     .eq("id", ticket.user_id)
     .maybeSingle();
   const strikes = (profile?.buyer_strikes ?? 0) + 1;
-  const updates: Record<string, unknown> = { buyer_strikes: strikes };
+  const updates: Record<string, string | number | boolean | null> = { buyer_strikes: strikes };
   if (strikes >= 2) updates.suspended_until = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   if (strikes >= 3) updates.banned_at = new Date().toISOString();
 
-  await supabaseAdmin.from("profiles").update(updates).eq("id", ticket.user_id);
+  await supabaseAdmin.from("profiles").update(updates as any).eq("id", ticket.user_id);
 }
 
 async function closeDisputeTickets(transactionId: string, adminId: string | null, note: string) {

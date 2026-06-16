@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
+export type StaffRole = "owner" | "moderator" | "support" | "seller" | null;
+
 type Profile = {
   id: string;
   username: string | null;
@@ -11,6 +13,12 @@ type Profile = {
   premium_until: string | null;
 };
 
+type StaffInfo = {
+  role: StaffRole;
+  permissions: string[];
+  isActive: boolean;
+};
+
 type AuthCtx = {
   user: User | null;
   session: Session | null;
@@ -18,6 +26,10 @@ type AuthCtx = {
   isAdmin: boolean;
   isPremium: boolean;
   loading: boolean;
+  staff: StaffInfo | null;
+  isOwner: boolean;
+  isStaff: boolean;
+  hasPermission: (perm: string) => boolean;
   refresh: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -29,38 +41,89 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [staff, setStaff] = useState<StaffInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
   async function loadExtras(uid: string) {
-    const [{ data: p }, { data: r }] = await Promise.all([
+    const [profileResult, rolesResult, staffResult] = await Promise.allSettled([
       supabase
         .from("profiles")
         .select("id, username, display_name, avatar_url, is_premium, premium_until")
         .eq("id", uid)
         .maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", uid),
+      supabase
+        .from("staff_members")
+        .select("role, permissions, is_active")
+        .eq("user_id", uid)
+        .eq("is_active", true)
+        .maybeSingle(),
     ]);
-    setProfile((p as Profile) ?? null);
-    setIsAdmin(!!r?.some((x: { role: string }) => x.role === "admin"));
+
+    try {
+      const p = profileResult.status === "fulfilled" ? profileResult.value.data : null;
+      const r = rolesResult.status === "fulfilled" ? rolesResult.value.data : null;
+      const s = staffResult.status === "fulfilled" ? staffResult.value.data : null;
+
+      if (profileResult.status === "rejected") {
+        console.error("[auth] profile load failed", profileResult.reason);
+      }
+      if (rolesResult.status === "rejected") {
+        console.error("[auth] user_roles load failed", rolesResult.reason);
+      }
+      if (staffResult.status === "rejected") {
+        console.error("[auth] staff_members load failed", staffResult.reason);
+      }
+
+      setProfile((p as Profile) ?? null);
+      setIsAdmin(!!r?.some((x: { role: string }) => x.role === "admin"));
+
+      if (s) {
+        const staffData = s as { role: string; permissions: string[]; is_active: boolean };
+        setStaff({
+          role: staffData.role as StaffRole,
+          permissions: staffData.permissions ?? [],
+          isActive: staffData.is_active,
+        });
+      } else {
+        setStaff(null);
+      }
+    } catch (e) {
+      console.error("[auth] loadExtras failed", e);
+      setStaff(null);
+      setIsAdmin(false);
+    }
   }
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
       setUser(s?.user ?? null);
+
       if (s?.user) {
-        setTimeout(() => loadExtras(s.user.id), 0);
+        setLoading(true);
+        setTimeout(() => {
+          loadExtras(s.user.id).finally(() => setLoading(false));
+        }, 0);
       } else {
         setProfile(null);
         setIsAdmin(false);
+        setStaff(null);
+        setLoading(false);
       }
     });
+
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       setUser(s?.user ?? null);
-      if (s?.user) loadExtras(s.user.id).finally(() => setLoading(false));
-      else setLoading(false);
+
+      if (s?.user) {
+        loadExtras(s.user.id).finally(() => setLoading(false));
+      } else {
+        setLoading(false);
+      }
     });
+
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -70,6 +133,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       (!profile.premium_until || new Date(profile.premium_until) > new Date())
     ) || isAdmin;
 
+  const isOwner = isAdmin || staff?.role === "owner";
+  const isStaff = isAdmin || !!staff;
+
+  const hasPermission = (perm: string): boolean => {
+    if (isAdmin) return true;
+    if (isOwner) return true;
+    if (!staff) return false;
+    return staff.permissions.includes(perm);
+  };
+
   const value: AuthCtx = {
     user,
     session,
@@ -77,6 +150,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAdmin,
     isPremium,
     loading,
+    staff,
+    isOwner,
+    isStaff,
+    hasPermission,
     refresh: async () => {
       if (user) await loadExtras(user.id);
     },

@@ -19,7 +19,7 @@ import {
 import { useState } from "react";
 
 export function Header() {
-  const { user, isAdmin, isPremium, signOut } = useAuth();
+  const { user, isAdmin, isStaff, isOwner, isPremium, signOut } = useAuth();
   const router = useRouter();
   const [open, setOpen] = useState(false);
 
@@ -62,7 +62,7 @@ export function Header() {
                   <Crown className="h-3 w-3 text-primary" /> Premium
                 </span>
               )}
-              {isAdmin && (
+              {(isAdmin || isStaff || isOwner) && (
                 <Button asChild variant="ghost" size="sm">
                   <Link to="/admin">
                     <Shield className="h-4 w-4" /> Admin
@@ -129,7 +129,7 @@ export function Header() {
               >
                 <LayoutDashboard className="h-4 w-4" /> Painel
               </Link>
-              {isAdmin && (
+              {(isAdmin || isStaff || isOwner) && (
                 <Link
                   to="/admin"
                   onClick={() => setOpen(false)}

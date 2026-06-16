@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { LifeBuoy, Plus, Send } from "lucide-react";
+import { Image, LifeBuoy, Paperclip, Plus, Send } from "lucide-react";
 
 export const Route = createFileRoute("/tickets")({
   head: () => ({ meta: [{ title: "Suporte — RBXScripts" }] }),
@@ -49,6 +49,8 @@ function TicketsPage() {
   const [cat, setCat] = useState<TicketCategory>("support");
   const [firstMsg, setFirstMsg] = useState("");
   const [reply, setReply] = useState("");
+  const [firstFile, setFirstFile] = useState<File | null>(null);
+  const [replyFile, setReplyFile] = useState<File | null>(null);
 
   type TicketRow = {
     id: string;
@@ -62,8 +64,25 @@ function TicketsPage() {
     ticket_id: string;
     sender_id: string;
     body: string;
+    attachment_url: string | null;
     created_at?: string;
   };
+
+  async function uploadSupportAttachment(file: File | null) {
+    if (!file) return null;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Envie apenas imagens/prints.");
+      return null;
+    }
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+    const path = `${user!.id}/${Date.now()}-${safeName}`;
+    const { data, error } = await supabase.storage.from("support-attachments").upload(path, file);
+    if (error) {
+      toast.error(error.message);
+      return null;
+    }
+    return data.path;
+  }
 
   const { data: tickets } = useQuery({
     queryKey: ["tickets", user?.id],
@@ -85,7 +104,7 @@ function TicketsPage() {
     queryFn: async () => {
       const res = await supabase
         .from("ticket_messages")
-        .select("id, ticket_id, sender_id, body")
+        .select("id, ticket_id, sender_id, body, attachment_url")
         .eq("ticket_id", selected!)
         .order("created_at");
 
@@ -109,23 +128,39 @@ function TicketsPage() {
       toast.error(error?.message ?? "Erro");
       return;
     }
-    await supabase
-      .from("ticket_messages")
-      .insert({ ticket_id: t.id, sender_id: user!.id, body: firstMsg });
+    await supabase.from("ticket_messages").insert({
+      ticket_id: t.id,
+      sender_id: user!.id,
+      body:
+        "BuxHub Support: descreva seu problema com detalhes, envie prints se possível e evite abrir múltiplos tickets sobre o mesmo assunto.",
+    });
+    const attachment_url = await uploadSupportAttachment(firstFile);
+    await supabase.from("ticket_messages").insert({
+      ticket_id: t.id,
+      sender_id: user!.id,
+      body: firstMsg,
+      attachment_url,
+    });
     toast.success("Ticket aberto");
     setCreating(false);
     setSubject("");
     setFirstMsg("");
+    setFirstFile(null);
     qc.invalidateQueries({ queryKey: ["tickets"] });
     setSelected(t.id);
   }
 
   async function sendReply() {
-    if (!reply.trim() || !selected) return;
-    await supabase
-      .from("ticket_messages")
-      .insert({ ticket_id: selected, sender_id: user!.id, body: reply });
+    if ((!reply.trim() && !replyFile) || !selected) return;
+    const attachment_url = await uploadSupportAttachment(replyFile);
+    await supabase.from("ticket_messages").insert({
+      ticket_id: selected,
+      sender_id: user!.id,
+      body: reply || "Print anexado",
+      attachment_url,
+    });
     setReply("");
+    setReplyFile(null);
     qc.invalidateQueries({ queryKey: ["t-msgs", selected] });
   }
 
@@ -167,6 +202,14 @@ function TicketsPage() {
               <div>
                 <Label>Mensagem</Label>
                 <Textarea rows={4} value={firstMsg} onChange={(e) => setFirstMsg(e.target.value)} />
+              </div>
+              <div>
+                <Label>Print opcional</Label>
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setFirstFile(e.target.files?.[0] ?? null)}
+                />
               </div>
               <div className="flex gap-2">
                 <Button onClick={createTicket}>Abrir</Button>
@@ -210,6 +253,13 @@ function TicketsPage() {
 
           {selected && (
             <Card className="flex flex-col h-[60vh]">
+              <div className="border-b border-white/10 p-3 text-xs text-muted-foreground flex gap-2">
+                <LifeBuoy className="h-4 w-4 text-primary shrink-0" />
+                <span>
+                  Descreva seu problema com detalhes, envie prints quando possível e evite abrir
+                  múltiplos tickets sobre o mesmo caso.
+                </span>
+              </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-2">
                 {msgs?.map((m) => (
                   <div
@@ -227,6 +277,11 @@ function TicketsPage() {
                       }
                     >
                       {m.body}
+                      {m.attachment_url && (
+                        <span className="mt-2 flex items-center gap-1 text-xs opacity-80">
+                          <Image className="h-3 w-3" /> Print anexado
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}

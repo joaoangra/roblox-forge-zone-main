@@ -40,6 +40,11 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
 async function handleApiRequest(request: Request): Promise<Response | null> {
   const pathname = new URL(request.url).pathname;
 
+  if (pathname.startsWith("/admin-api/")) {
+    const { handleAdminApi } = await import("./admin/api");
+    return handleAdminApi(request);
+  }
+
   if (pathname === "/create-checkout-session") {
     const { handleCreateCheckoutSession } = await import("./stripe/checkout");
     return handleCreateCheckoutSession(request);

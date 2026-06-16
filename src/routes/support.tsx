@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { TicketCategory } from "@/integrations/supabase/types";
 import { useAuth } from "@/lib/auth";
 import { PageShell } from "@/components/site/PageShell";
 import { Card, CardContent } from "@/components/ui/card";
@@ -46,8 +47,31 @@ const categories = [
   { value: "report", label: "Denúncias", icon: AlertTriangle, color: "text-orange-400" },
 ];
 
+// Map support categories to the TicketCategory enum values expected by the DB
+function mapCategoryToTicketEnum(cat: string): TicketCategory {
+  const map: Record<string, TicketCategory> = {
+    duvidas: "support",
+    financial: "financial",
+    marketplace: "support",
+    premium: "sales",
+    security: "security",
+    technical: "bug",
+    report: "support",
+  };
+  return map[cat] ?? "support";
+}
+
+type TicketRow = {
+  id: string;
+  subject: string;
+  category: string;
+  status: string;
+  created_at: string;
+};
+
 function SupportPage() {
   const { user } = useAuth();
+  const qc = useQueryClient();
   const [selectedCategory, setSelectedCategory] = useState("");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
@@ -57,13 +81,14 @@ function SupportPage() {
     queryKey: ["my-tickets", user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data } = await (supabase as any)
-        .from("support_tickets")
-        .select("*")
+      const { data } = await supabase
+        .from("tickets")
+        .select("id, subject, category, status, created_at")
         .eq("user_id", user!.id)
         .order("created_at", { ascending: false })
         .limit(20);
-      return (data ?? []) as any[];
+
+      return (data ?? []) as TicketRow[];
     },
   });
 
@@ -77,22 +102,48 @@ function SupportPage() {
       return;
     }
     setSending(true);
-    const { error } = await (supabase as any).from("support_tickets").insert({
-      user_id: user.id,
-      category: selectedCategory,
-      subject,
-      message,
-      status: "open",
-    });
-    setSending(false);
-    if (error) {
-      toast.error(error.message);
+
+    // Map the support category to the DB ticket_category enum
+    const dbCategory = mapCategoryToTicketEnum(selectedCategory);
+
+    // 1) Insert into tickets table
+    const { data: t, error } = await supabase
+      .from("tickets")
+      .insert({
+        user_id: user.id,
+        category: dbCategory,
+        subject,
+      })
+      .select()
+      .single();
+
+    if (error || !t) {
+      toast.error(error?.message ?? "Erro ao abrir ticket");
+      setSending(false);
       return;
     }
+
+    // 2) Insert first message into ticket_messages
+    const { error: msgError } = await supabase
+      .from("ticket_messages")
+      .insert({
+        ticket_id: t.id,
+        sender_id: user.id,
+        body: message,
+      });
+
+    setSending(false);
+
+    if (msgError) {
+      toast.error(msgError.message);
+      return;
+    }
+
     toast.success("Ticket aberto! Responderemos em breve.");
     setSelectedCategory("");
     setSubject("");
     setMessage("");
+    qc.invalidateQueries({ queryKey: ["my-tickets"] });
   }
 
   const statusBadge = (status: string) => {
@@ -193,7 +244,7 @@ function SupportPage() {
           <TabsContent value="my">
             {(tickets ?? []).length > 0 ? (
               <div className="space-y-3 max-w-2xl mx-auto">
-                {(tickets ?? []).map((t: any) => {
+                {(tickets ?? []).map((t) => {
                   const s = statusBadge(t.status);
                   return (
                     <Card key={t.id} className="border-white/10 bg-card/50">

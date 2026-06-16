@@ -1,5 +1,6 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { PageShell } from "@/components/site/PageShell";
@@ -24,6 +25,19 @@ export const Route = createFileRoute("/premium")({
 function PremiumPage() {
   const { user, isPremium } = useAuth();
   const router = useRouter();
+
+  // Feedback simples quando o usuário cancela o checkout no Stripe
+  const search = Route.useSearch();
+  const checkout = (search as unknown as { checkout?: string }).checkout;
+  // (Route.useSearch() aqui é seguro porque o componente está dentro da Route)
+  // Observação: usamos toast ao invés de render condicional para manter simples.
+  useEffect(() => {
+    if (checkout === "cancelled") {
+      toast.message("Pagamento cancelado. Você pode escolher outro plano quando quiser.");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkout]);
+
 
   const { data: plans, isLoading } = useQuery({
     queryKey: ["plans"],

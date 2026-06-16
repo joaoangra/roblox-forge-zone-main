@@ -1,872 +1,704 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
-import { PageShell } from "@/components/site/PageShell";
+import { adminApi } from "@/lib/adminApi";
+import { AdminLayout } from "@/components/admin/AdminLayout";
+import type { TabId } from "@/components/admin/AdminLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Shield, Plus, Trash2, Check, X, MessageSquare } from "lucide-react";
+import {
+  Ticket,
+  Users,
+  FileText,
+  Megaphone,
+  Shield,
+  Clock,
+  MessageSquare,
+  Send,
+  Plus,
+  Trash2,
+  Check,
+  X,
+  AlertCircle,
+  Activity,
+  UserCheck,
+  ShoppingBag,
+  DollarSign,
+} from "lucide-react";
 
 export const Route = createFileRoute("/admin")({
-  head: () => ({ meta: [{ title: "Admin – RBXScripts" }] }),
+  head: () => ({ meta: [{ title: "Admin – BuxHub" }] }),
   component: AdminPage,
 });
 
+// ============ PAGE COMPONENT ============
 function AdminPage() {
-  const { user, isAdmin, loading } = useAuth();
-  const router = useRouter();
-  useEffect(() => {
-    if (!loading) {
-      if (!user) router.navigate({ to: "/auth" });
-      else if (!isAdmin) router.navigate({ to: "/" });
-    }
-  }, [loading, user, isAdmin, router]);
-
-  if (!user || !isAdmin) return null;
+  const [tab, setTab] = useState<TabId>("dashboard");
 
   return (
-    <PageShell>
-      <div className="mx-auto max-w-7xl px-4 py-8">
-        <div className="flex items-center gap-2 mb-6">
-          <Shield className="h-6 w-6 text-primary" />
-          <h1 className="text-3xl font-bold">Painel Admin</h1>
-        </div>
-
-        <Tabs defaultValue="scripts">
-          <TabsList className="mb-6 flex-wrap h-auto">
-            <TabsTrigger value="scripts">Scripts</TabsTrigger>
-            <TabsTrigger value="executors">Executores</TabsTrigger>
-            <TabsTrigger value="categories">Categorias</TabsTrigger>
-            <TabsTrigger value="plans">Planos</TabsTrigger>
-            <TabsTrigger value="orders">Pedidos</TabsTrigger>
-            <TabsTrigger value="pix">PIX</TabsTrigger>
-            <TabsTrigger value="users">Usuários</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="scripts">
-            <AdminScripts />
-          </TabsContent>
-          <TabsContent value="executors">
-            <AdminExecutors />
-          </TabsContent>
-          <TabsContent value="categories">
-            <AdminCategories />
-          </TabsContent>
-          <TabsContent value="plans">
-            <AdminPlans />
-          </TabsContent>
-          <TabsContent value="orders">
-            <AdminOrders />
-          </TabsContent>
-          <TabsContent value="pix">
-            <AdminPix />
-          </TabsContent>
-          <TabsContent value="users">
-            <AdminUsers />
-          </TabsContent>
-        </Tabs>
-      </div>
-    </PageShell>
+    <AdminLayout activeTab={tab} onTabChange={setTab}>
+      {tab === "dashboard" && <DashboardTab />}
+      {tab === "tickets" && <TicketsTab />}
+      {tab === "announcements" && <AnnouncementsTab />}
+      {tab === "users" && <UsersTab />}
+      {tab === "logs" && <LogsTab />}
+      {tab === "staff" && <StaffTab />}
+      {tab === "shop" && <ShopTab />}
+      {tab === "settings" && <SettingsTab />}
+    </AdminLayout>
   );
 }
 
-function slugify(s: string) {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
+// ============ DASHBOARD ============
+function DashboardTab() {
+  const { isOwner } = useAuth();
 
-// ============ SCRIPTS ============
-function AdminScripts() {
-  const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({
-    title: "",
-    description: "",
-    code: "",
-    game_name: "",
-    thumbnail_url: "",
-    category_id: "",
-    is_premium: false,
-    is_verified: false,
-  });
-  const { data: scripts } = useQuery({
-    queryKey: ["admin-scripts"],
-    queryFn: async () =>
-      (
-        await supabase
-          .from("scripts")
-          .select("*, categories(name)")
-          .order("created_at", { ascending: false })
-      ).data ?? [],
-  });
-  const { data: categories } = useQuery({
-    queryKey: ["categories"],
-    queryFn: async () => (await supabase.from("categories").select("*").order("name")).data ?? [],
-  });
-
-  async function save() {
-    if (!form.title || !form.code) {
-      toast.error("Título e código obrigatórios");
-      return;
-    }
-    const slug = slugify(form.title) + "-" + Date.now().toString(36);
-    const { error } = await supabase
-      .from("scripts")
-      .insert({ ...form, slug, category_id: form.category_id || null });
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    toast.success("Script criado!");
-    setForm({
-      title: "",
-      description: "",
-      code: "",
-      game_name: "",
-      thumbnail_url: "",
-      category_id: "",
-      is_premium: false,
-      is_verified: false,
-    });
-    setOpen(false);
-    qc.invalidateQueries({ queryKey: ["admin-scripts"] });
-  }
-  async function del(id: string) {
-    if (!confirm("Excluir script?")) return;
-    const { error } = await supabase.from("scripts").delete().eq("id", id);
-    if (error) toast.error(error.message);
-    else {
-      toast.success("Excluído");
-      qc.invalidateQueries({ queryKey: ["admin-scripts"] });
-    }
-  }
-
-  return (
-    <Card className="border-white/10 bg-card/50">
-      <CardContent className="p-6">
-        <div className="flex justify-between mb-4">
-          <h2 className="font-semibold">Scripts ({scripts?.length ?? 0})</h2>
-          <Button onClick={() => setOpen(!open)} size="sm">
-            <Plus className="h-4 w-4" /> Novo
-          </Button>
-        </div>
-        {open && (
-          <div className="grid md:grid-cols-2 gap-3 mb-6 p-4 rounded-lg border border-white/10 bg-black/20">
-            <div>
-              <Label>Título</Label>
-              <Input
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Jogo</Label>
-              <Input
-                value={form.game_name}
-                onChange={(e) => setForm({ ...form, game_name: e.target.value })}
-                placeholder="Blox Fruits"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <Label>Descrição</Label>
-              <Input
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-              />
-            </div>
-            <div className="md:col-span-2">
-              <Label>Código Lua</Label>
-              <Textarea
-                rows={8}
-                value={form.code}
-                onChange={(e) => setForm({ ...form, code: e.target.value })}
-                placeholder="loadstring(game:HttpGet('...'))()"
-                className="font-mono text-xs"
-              />
-            </div>
-            <div>
-              <Label>URL da thumbnail</Label>
-              <Input
-                value={form.thumbnail_url}
-                onChange={(e) => setForm({ ...form, thumbnail_url: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Categoria</Label>
-              <select
-                className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-                value={form.category_id}
-                onChange={(e) => setForm({ ...form, category_id: e.target.value })}
-              >
-                <option value="">— sem categoria —</option>
-                {(categories ?? []).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex gap-6 items-center md:col-span-2">
-              <label className="flex items-center gap-2 text-sm">
-                <Switch
-                  checked={form.is_premium}
-                  onCheckedChange={(v) => setForm({ ...form, is_premium: v })}
-                />{" "}
-                Premium
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <Switch
-                  checked={form.is_verified}
-                  onCheckedChange={(v) => setForm({ ...form, is_verified: v })}
-                />{" "}
-                Verificado
-              </label>
-            </div>
-            <div className="md:col-span-2">
-              <Button
-                onClick={save}
-                className="bg-gradient-to-r from-primary to-accent text-white border-0"
-              >
-                Salvar
-              </Button>
-            </div>
-          </div>
-        )}
-        <div className="space-y-2">
-          {(scripts ?? []).map((s) => (
-            <div
-              key={s.id}
-              className="flex items-center justify-between p-3 rounded-lg border border-white/10"
-            >
-              <div>
-                <div className="font-medium flex items-center gap-2">
-                  {s.title}{" "}
-                  {s.is_premium && (
-                    <Badge className="bg-gradient-to-r from-primary to-accent border-0 text-[10px]">
-                      Premium
-                    </Badge>
-                  )}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {s.game_name} · {(s.categories as { name?: string } | null)?.name ?? "—"} ·{" "}
-                  {s.views} views
-                </div>
-              </div>
-              <Button size="sm" variant="ghost" onClick={() => del(s.id)}>
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ============ EXECUTORS ============
-function AdminExecutors() {
-  const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({
-    name: "",
-    description: "",
-    download_url: "",
-    image_url: "",
-    price_brl: 0,
-    is_free: true,
-  });
-  const { data } = useQuery({
-    queryKey: ["admin-executors"],
-    queryFn: async () =>
-      (await supabase.from("executors").select("*").order("created_at", { ascending: false }))
-        .data ?? [],
-  });
-
-  async function save() {
-    if (!form.name || !form.download_url) {
-      toast.error("Nome e download obrigatórios");
-      return;
-    }
-    const slug = slugify(form.name) + "-" + Date.now().toString(36);
-    const { error } = await supabase.from("executors").insert({ ...form, slug });
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    toast.success("Executor criado!");
-    setForm({
-      name: "",
-      description: "",
-      download_url: "",
-      image_url: "",
-      price_brl: 0,
-      is_free: true,
-    });
-    setOpen(false);
-    qc.invalidateQueries({ queryKey: ["admin-executors"] });
-  }
-  async function del(id: string) {
-    if (!confirm("Excluir?")) return;
-    await supabase.from("executors").delete().eq("id", id);
-    qc.invalidateQueries({ queryKey: ["admin-executors"] });
-  }
-
-  return (
-    <Card className="border-white/10 bg-card/50">
-      <CardContent className="p-6">
-        <div className="flex justify-between mb-4">
-          <h2 className="font-semibold">Executores ({data?.length ?? 0})</h2>
-          <Button onClick={() => setOpen(!open)} size="sm">
-            <Plus className="h-4 w-4" /> Novo
-          </Button>
-        </div>
-        {open && (
-          <div className="grid md:grid-cols-2 gap-3 mb-6 p-4 rounded-lg border border-white/10 bg-black/20">
-            <div>
-              <Label>Nome</Label>
-              <Input
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Preço (BRL)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={form.price_brl}
-                onChange={(e) => setForm({ ...form, price_brl: Number(e.target.value) })}
-              />
-            </div>
-            <div className="md:col-span-2">
-              <Label>Descrição</Label>
-              <Textarea
-                rows={3}
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>URL download</Label>
-              <Input
-                value={form.download_url}
-                onChange={(e) => setForm({ ...form, download_url: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>URL imagem</Label>
-              <Input
-                value={form.image_url}
-                onChange={(e) => setForm({ ...form, image_url: e.target.value })}
-              />
-            </div>
-            <label className="flex items-center gap-2 text-sm md:col-span-2">
-              <Switch
-                checked={form.is_free}
-                onCheckedChange={(v) => setForm({ ...form, is_free: v })}
-              />{" "}
-              Gratuito
-            </label>
-            <div className="md:col-span-2">
-              <Button
-                onClick={save}
-                className="bg-gradient-to-r from-primary to-accent text-white border-0"
-              >
-                Salvar
-              </Button>
-            </div>
-          </div>
-        )}
-        <div className="space-y-2">
-          {(data ?? []).map((e) => (
-            <div
-              key={e.id}
-              className="flex items-center justify-between p-3 rounded-lg border border-white/10"
-            >
-              <div>
-                <div className="font-medium">{e.name}</div>
-                <div className="text-xs text-muted-foreground">
-                  {e.is_free ? "Grátis" : `R$ ${Number(e.price_brl).toFixed(2)}`}
-                </div>
-              </div>
-              <Button size="sm" variant="ghost" onClick={() => del(e.id)}>
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ============ CATEGORIES ============
-function AdminCategories() {
-  const qc = useQueryClient();
-  const [name, setName] = useState("");
-  const { data } = useQuery({
-    queryKey: ["admin-categories"],
-    queryFn: async () =>
-      (await supabase.from("categories").select("*").order("sort_order")).data ?? [],
-  });
-  async function add() {
-    if (!name) return;
-    const { error } = await supabase.from("categories").insert({ name, slug: slugify(name) });
-    if (error) toast.error(error.message);
-    else {
-      setName("");
-      qc.invalidateQueries({ queryKey: ["admin-categories"] });
-      qc.invalidateQueries({ queryKey: ["categories"] });
-    }
-  }
-  async function del(id: string) {
-    if (!confirm("Excluir?")) return;
-    await supabase.from("categories").delete().eq("id", id);
-    qc.invalidateQueries({ queryKey: ["admin-categories"] });
-  }
-  return (
-    <Card className="border-white/10 bg-card/50">
-      <CardContent className="p-6">
-        <div className="flex gap-2 mb-4">
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Nome da categoria"
-          />
-          <Button onClick={add}>
-            <Plus className="h-4 w-4" />
-          </Button>
-        </div>
-        <div className="space-y-2">
-          {(data ?? []).map((c) => (
-            <div
-              key={c.id}
-              className="flex items-center justify-between p-3 rounded-lg border border-white/10"
-            >
-              <div>
-                {c.name} <span className="text-xs text-muted-foreground">/{c.slug}</span>
-              </div>
-              <Button size="sm" variant="ghost" onClick={() => del(c.id)}>
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ============ PLANS ============
-function AdminPlans() {
-  const qc = useQueryClient();
-  const [form, setForm] = useState({
-    name: "",
-    description: "",
-    duration_days: 30,
-    price_brl: 19.9,
-    features: "",
-  });
-  const { data } = useQuery({
-    queryKey: ["admin-plans"],
-    queryFn: async () =>
-      (await supabase.from("premium_plans").select("*").order("sort_order")).data ?? [],
-  });
-  async function add() {
-    if (!form.name) return;
-    const { error } = await supabase
-      .from("premium_plans")
-      .insert({ ...form, features: form.features.split("\n").filter(Boolean) });
-    if (error) toast.error(error.message);
-    else {
-      setForm({ name: "", description: "", duration_days: 30, price_brl: 19.9, features: "" });
-      qc.invalidateQueries({ queryKey: ["admin-plans"] });
-    }
-  }
-  async function toggle(id: string, current: boolean) {
-    await supabase.from("premium_plans").update({ is_active: !current }).eq("id", id);
-    qc.invalidateQueries({ queryKey: ["admin-plans"] });
-  }
-  async function del(id: string) {
-    if (!confirm("Excluir?")) return;
-    await supabase.from("premium_plans").delete().eq("id", id);
-    qc.invalidateQueries({ queryKey: ["admin-plans"] });
-  }
-  return (
-    <Card className="border-white/10 bg-card/50">
-      <CardContent className="p-6">
-        <div className="grid md:grid-cols-2 gap-3 mb-4 p-4 rounded-lg border border-white/10 bg-black/20">
-          <div>
-            <Label>Nome</Label>
-            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          </div>
-          <div>
-            <Label>Descrição</Label>
-            <Input
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-            />
-          </div>
-          <div>
-            <Label>Duração (dias)</Label>
-            <Input
-              type="number"
-              value={form.duration_days}
-              onChange={(e) => setForm({ ...form, duration_days: Number(e.target.value) })}
-            />
-          </div>
-          <div>
-            <Label>Preço (BRL)</Label>
-            <Input
-              type="number"
-              step="0.01"
-              value={form.price_brl}
-              onChange={(e) => setForm({ ...form, price_brl: Number(e.target.value) })}
-            />
-          </div>
-          <div className="md:col-span-2">
-            <Label>Recursos (um por linha)</Label>
-            <Textarea
-              rows={4}
-              value={form.features}
-              onChange={(e) => setForm({ ...form, features: e.target.value })}
-            />
-          </div>
-          <div className="md:col-span-2">
-            <Button onClick={add}>
-              <Plus className="h-4 w-4" /> Criar plano
-            </Button>
-          </div>
-        </div>
-        <div className="space-y-2">
-          {(data ?? []).map((p) => (
-            <div
-              key={p.id}
-              className="flex items-center justify-between p-3 rounded-lg border border-white/10"
-            >
-              <div>
-                <div className="font-medium">
-                  {p.name} · R$ {Number(p.price_brl).toFixed(2)}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {p.duration_days} dias · {p.is_active ? "ativo" : "inativo"}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={() => toggle(p.id, p.is_active)}>
-                  {p.is_active ? "Desativar" : "Ativar"}
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => del(p.id)}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ============ ORDERS ============
-function AdminOrders() {
-  const qc = useQueryClient();
-  const { data } = useQuery({
-    queryKey: ["admin-orders"],
-    refetchInterval: 10000,
+  const { data: metrics } = useQuery({
+    queryKey: ["admin-dashboard", isOwner],
+    refetchInterval: 15000,
     queryFn: async () => {
-      const orders =
-        (
-          await supabase
-            .from("premium_orders")
-            .select("*, premium_plans(name, duration_days)")
-            .order("created_at", { ascending: false })
-        ).data ?? [];
+      const [users, tickets] = await Promise.all([
+        supabase.from("profiles").select("*", { count: "exact", head: true }),
+        supabase.from("tickets").select("*", { count: "exact", head: true }).in("status", ["open", "in_progress", "waiting_user"]),
+      ]);
 
-      const userIds = [...new Set(orders.map((order) => order.user_id))];
-      const profiles = userIds.length
-        ? ((await supabase.from("profiles").select("id, username, display_name").in("id", userIds))
-            .data ?? [])
-        : [];
+      const finance = isOwner ? await adminApi<{ totalRevenue: number }>("owner-finance-summary") : null;
 
-      const profilesById = new Map(profiles.map((profile) => [profile.id, profile]));
-      return orders.map((order) => ({
-        ...order,
-        profiles: profilesById.get(order.user_id) ?? null,
-      }));
+      return {
+        users: users.count ?? 0,
+        openTickets: tickets.count ?? 0,
+        revenue: finance?.totalRevenue ?? null,
+      };
     },
   });
 
-  const orders = useMemo(() => data ?? [], [data]);
-
-  async function confirmOrder(o: {
-    id: string;
-    user_id: string;
-    premium_plans: { duration_days?: number } | null;
-  }) {
-    const days = o.premium_plans?.duration_days ?? 30;
-    const until = new Date();
-    until.setDate(until.getDate() + days);
-    const { error: e1 } = await supabase
-      .from("premium_orders")
-      .update({ status: "confirmed", confirmed_at: new Date().toISOString() })
-      .eq("id", o.id);
-    const { error: e2 } = await supabase
-      .from("profiles")
-      .update({ is_premium: true, premium_until: until.toISOString() })
-      .eq("id", o.user_id);
-    if (e1 || e2) toast.error((e1 || e2)?.message ?? "Erro");
-    else {
-      toast.success("Premium liberado!");
-      qc.invalidateQueries({ queryKey: ["admin-orders"] });
-    }
-  }
-  async function reject(id: string) {
-    if (!confirm("Rejeitar pedido?")) return;
-    await supabase.from("premium_orders").update({ status: "rejected" }).eq("id", id);
-    qc.invalidateQueries({ queryKey: ["admin-orders"] });
-  }
+  const cards = [
+    { label: "Usuários", value: metrics?.users ?? 0, icon: Users, color: "from-blue-500/20 to-blue-600/20" },
+    { label: "Tickets Abertos", value: metrics?.openTickets ?? 0, icon: Ticket, color: "from-orange-500/20 to-red-500/20" },
+    isOwner
+      ? { label: "Receita Total", value: `R$ ${(metrics?.revenue ?? 0).toFixed(2)}`, icon: DollarSign, color: "from-purple-500/20 to-violet-500/20" }
+      : { label: "Acesso", value: "Limitado", icon: Shield, color: "from-slate-500/20 to-slate-600/20" },
+  ];
 
   return (
-    <Card className="border-white/10 bg-card/50">
-      <CardContent className="p-6">
-        <div className="space-y-2">
-          {orders.map((o) => {
-            const prof = o.profiles as { username?: string; display_name?: string } | null;
-            return (
-              <div key={o.id} className="p-4 rounded-lg border border-white/10">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <div className="font-medium">
-                      {(o.premium_plans as { name?: string } | null)?.name ?? "Plano"} · R${" "}
-                      {Number(o.amount_brl).toFixed(2)}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      @{prof?.username ?? "—"} · {new Date(o.created_at).toLocaleString("pt-BR")} ·
-                      status: {o.status}
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <a href={`/orders/${o.id}`}>
-                      <Button size="sm" variant="outline">
-                        <MessageSquare className="h-4 w-4" /> Chat
-                      </Button>
-                    </a>
-                    {o.status !== "confirmed" && (
-                      <Button
-                        size="sm"
-                        className="bg-success text-success-foreground"
-                        onClick={() => confirmOrder(o)}
-                      >
-                        <Check className="h-4 w-4" /> Liberar
-                      </Button>
-                    )}
-                    {o.status !== "rejected" && o.status !== "confirmed" && (
-                      <Button size="sm" variant="destructive" onClick={() => reject(o.id)}>
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
+    <div className="space-y-6">
+      <h2 className="text-lg font-semibold">Visão Geral</h2>
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {cards.map((c) => (
+          <Card key={c.label} className="border-white/10 bg-card/50 overflow-hidden">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">{c.label}</p>
+                  <p className="text-2xl font-bold mt-1">{c.value}</p>
+                </div>
+                <div className={`h-10 w-10 rounded-lg bg-gradient-to-br ${c.color} grid place-items-center`}>
+                  <c.icon className="h-5 w-5" />
                 </div>
               </div>
-            );
-          })}
-          {orders.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-8">Nenhum pedido ainda.</p>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      {isOwner && (
+        <Card className="border-white/10 bg-card/50">
+          <CardContent className="p-5">
+            <div className="flex items-center gap-2 text-amber-400">
+              <Shield className="h-5 w-5" />
+              <span className="font-semibold">Você tem acesso total ao sistema</span>
+            </div>
+            <p className="text-sm text-muted-foreground mt-1">
+              Como Owner você pode gerenciar staff, finanças e configurações do site.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }
 
-// ============ PIX SETTINGS ============
-function AdminPix() {
+// ============ TICKETS (ADMIN VIEW) ============
+function TicketsTab() {
+  const { user } = useAuth();
   const qc = useQueryClient();
-  const { data } = useQuery({
-    queryKey: ["pix-settings"],
-    queryFn: async () =>
-      (await supabase.from("pix_settings").select("*").eq("id", 1).maybeSingle()).data,
+
+  const { data: tickets } = useQuery({
+    queryKey: ["admin-tickets"],
+    refetchInterval: 10000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("tickets")
+        .select("*, profiles!tickets_user_id_fkey(username, display_name)")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      return (data ?? []) as any[];
+    },
   });
-  const [form, setForm] = useState({
-    pix_key: "",
-    pix_key_type: "email",
-    recipient_name: "",
-    instructions: "",
+
+  const [selectedTicket, setSelectedTicket] = useState<any>(null);
+  const [reply, setReply] = useState("");
+
+  const { data: messages } = useQuery({
+    queryKey: ["admin-ticket-msgs", selectedTicket?.id],
+    enabled: !!selectedTicket,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("ticket_messages")
+        .select("*, profiles!ticket_messages_sender_id_fkey(username)")
+        .eq("ticket_id", selectedTicket!.id)
+        .order("created_at");
+      return (data ?? []) as any[];
+    },
+    refetchInterval: 5000,
   });
-  useEffect(() => {
-    if (data)
-      setForm({
-        pix_key: data.pix_key,
-        pix_key_type: data.pix_key_type,
-        recipient_name: data.recipient_name,
-        instructions: data.instructions,
-      });
-  }, [data]);
-  async function save() {
-    const { error } = await supabase
-      .from("pix_settings")
-      .update({ ...form, updated_at: new Date().toISOString() })
-      .eq("id", 1);
-    if (error) toast.error(error.message);
-    else {
-      toast.success("Salvo");
-      qc.invalidateQueries({ queryKey: ["pix-settings"] });
-    }
+
+  async function sendReply() {
+    if (!reply.trim() || !selectedTicket) return;
+    await adminApi("reply-ticket", { ticket_id: selectedTicket.id, body: reply });
+    setReply("");
+    qc.invalidateQueries({ queryKey: ["admin-ticket-msgs", selectedTicket.id] });
+    qc.invalidateQueries({ queryKey: ["admin-tickets"] });
   }
+
+  async function updateStatus(id: string, status: string) {
+    await adminApi("update-ticket-status", { id, status });
+    qc.invalidateQueries({ queryKey: ["admin-tickets"] });
+    toast.success(`Status atualizado para ${status}`);
+  }
+
+  const statusColors: Record<string, string> = {
+    open: "bg-green-500/20 text-green-400",
+    in_progress: "bg-blue-500/20 text-blue-400",
+    waiting_user: "bg-yellow-500/20 text-yellow-400",
+    resolved: "bg-green-500/20 text-green-400",
+    closed: "bg-muted text-muted-foreground",
+  };
+
   return (
-    <Card className="border-white/10 bg-card/50">
-      <CardContent className="p-6 grid md:grid-cols-2 gap-3">
-        <div>
-          <Label>Chave PIX</Label>
-          <Input
-            value={form.pix_key}
-            onChange={(e) => setForm({ ...form, pix_key: e.target.value })}
-            placeholder="seu@email.com / CPF / aleatória"
-          />
+    <div className="space-y-4">
+      <h2 className="text-lg font-semibold flex items-center gap-2">
+        <Ticket className="h-5 w-5" /> Tickets de Suporte
+      </h2>
+
+      <div className="grid lg:grid-cols-[1fr_2fr] gap-4">
+        {/* Lista de tickets */}
+        <div className="space-y-2 max-h-[70vh] overflow-y-auto">
+          {(tickets ?? []).map((t: any) => (
+            <button
+              key={t.id}
+              onClick={() => setSelectedTicket(t)}
+              className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                selectedTicket?.id === t.id
+                  ? "border-primary bg-primary/5"
+                  : "border-white/10 hover:bg-white/5"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className={`text-xs px-2 py-0.5 rounded-full ${statusColors[t.status] ?? ""}`}>
+                  {t.status}
+                </span>
+                <span className="text-[10px] text-muted-foreground">
+                  {new Date(t.created_at).toLocaleDateString("pt-BR")}
+                </span>
+              </div>
+              <p className="font-semibold text-sm mt-1 truncate">{t.subject}</p>
+              <p className="text-xs text-muted-foreground truncate">
+                {t.profiles?.username ?? "—"} · {t.category}
+              </p>
+            </button>
+          ))}
+          {(tickets ?? []).length === 0 && (
+            <p className="text-sm text-muted-foreground p-4">Nenhum ticket.</p>
+          )}
         </div>
-        <div>
-          <Label>Tipo</Label>
-          <select
-            className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-            value={form.pix_key_type}
-            onChange={(e) => setForm({ ...form, pix_key_type: e.target.value })}
-          >
-            <option value="email">Email</option>
-            <option value="cpf">CPF</option>
-            <option value="phone">Telefone</option>
-            <option value="random">Aleatória</option>
-          </select>
-        </div>
-        <div>
-          <Label>Nome do recebedor</Label>
-          <Input
-            value={form.recipient_name}
-            onChange={(e) => setForm({ ...form, recipient_name: e.target.value })}
-          />
-        </div>
-        <div className="md:col-span-2">
-          <Label>Instruções</Label>
-          <Textarea
-            rows={3}
-            value={form.instructions}
-            onChange={(e) => setForm({ ...form, instructions: e.target.value })}
-          />
-        </div>
-        <div className="md:col-span-2">
-          <Button
-            onClick={save}
-            className="bg-gradient-to-r from-primary to-accent text-white border-0"
-          >
-            Salvar PIX
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+
+        {/* Chat / Detalhes do ticket */}
+        {selectedTicket ? (
+          <Card className="border-white/10 bg-card/50 flex flex-col h-[70vh]">
+            <CardContent className="p-4 border-b border-white/10">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold">{selectedTicket.subject}</h3>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedTicket.profiles?.username ?? "—"} · Categoria: {selectedTicket.category}
+                  </p>
+                </div>
+                <div className="flex gap-1">
+                  {["open", "in_progress", "waiting_user", "resolved", "closed"].map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => updateStatus(selectedTicket.id, s)}
+                      className={`text-[10px] px-2 py-1 rounded ${
+                        selectedTicket.status === s
+                          ? "bg-primary/20 text-primary"
+                          : "text-muted-foreground hover:bg-white/5"
+                      }`}
+                    >
+                      {s === "in_progress" ? "andamento" : s === "waiting_user" ? "aguardando" : s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {(messages ?? []).map((m: any) => (
+                <div
+                  key={m.id}
+                  className={`flex ${m.sender_id === user!.id ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
+                      m.sender_id === user!.id
+                        ? "bg-primary text-white"
+                        : "bg-white/5"
+                    }`}
+                  >
+                    <p className="text-[10px] opacity-60 mb-1">{m.profiles?.username ?? "—"}</p>
+                    <p>{m.body}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="p-3 border-t border-white/10 flex gap-2">
+              <Textarea
+                rows={1}
+                value={reply}
+                onChange={(e) => setReply(e.target.value)}
+                placeholder="Responder..."
+                className="resize-none"
+              />
+              <Button onClick={sendReply}><Send className="h-4 w-4" /></Button>
+            </div>
+          </Card>
+        ) : (
+          <Card className="border-dashed border-white/10 bg-card/50">
+            <CardContent className="p-10 text-center text-muted-foreground">
+              <MessageSquare className="h-10 w-10 mx-auto mb-3 opacity-50" />
+              Selecione um ticket para visualizar
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============ ANNOUNCEMENTS (AVISOS) ============
+function AnnouncementsTab() {
+  const qc = useQueryClient();
+  const [form, setForm] = useState({
+    title: "",
+    content: "",
+    priority: "normal",
+    type: "permanent",
+    expires_at: "",
+  });
+
+  const { data: announcements } = useQuery({
+    queryKey: ["admin-announcements"],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("site_announcements")
+        .select("*")
+        .order("created_at", { ascending: false });
+      return (data ?? []) as any[];
+    },
+  });
+
+  async function create() {
+    if (!form.title || !form.content) {
+      toast.error("Preencha título e conteúdo");
+      return;
+    }
+    const payload: any = {
+      title: form.title,
+      content: form.content,
+      priority: form.priority,
+      type: form.type,
+    };
+    if (form.type === "temporary" && form.expires_at) {
+      payload.expires_at = new Date(form.expires_at).toISOString();
+    }
+    try {
+      await adminApi("create-announcement", payload);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro ao criar aviso");
+      return;
+    }
+    toast.success("Aviso criado!");
+    setForm({ title: "", content: "", priority: "normal", type: "permanent", expires_at: "" });
+    qc.invalidateQueries({ queryKey: ["admin-announcements"] });
+  }
+
+  async function toggleActive(id: string, current: boolean) {
+    await adminApi("toggle-announcement", { id, active: !current });
+    qc.invalidateQueries({ queryKey: ["admin-announcements"] });
+  }
+
+  async function remove(id: string) {
+    if (!confirm("Excluir aviso?")) return;
+    await adminApi("delete-announcement", { id });
+    qc.invalidateQueries({ queryKey: ["admin-announcements"] });
+  }
+
+  const priorityColors: Record<string, string> = {
+    normal: "bg-blue-500/20 text-blue-400",
+    important: "bg-orange-500/20 text-orange-400",
+    critical: "bg-red-500/20 text-red-400",
+  };
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-lg font-semibold flex items-center gap-2">
+        <Megaphone className="h-5 w-5" /> Avisos Globais
+      </h2>
+
+      <Card className="border-white/10 bg-card/50">
+        <CardContent className="p-5 space-y-3">
+          <h3 className="font-medium">Criar Novo Aviso</h3>
+          <div className="grid md:grid-cols-2 gap-3">
+            <div>
+              <Label>Título</Label>
+              <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label>Prioridade</Label>
+                <select
+                  className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+                  value={form.priority}
+                  onChange={(e) => setForm({ ...form, priority: e.target.value })}
+                >
+                  <option value="normal">Normal</option>
+                  <option value="important">Importante</option>
+                  <option value="critical">Crítico</option>
+                </select>
+              </div>
+              <div>
+                <Label>Tipo</Label>
+                <select
+                  className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+                  value={form.type}
+                  onChange={(e) => setForm({ ...form, type: e.target.value })}
+                >
+                  <option value="permanent">Permanente</option>
+                  <option value="temporary">Temporário</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          {form.type === "temporary" && (
+            <div>
+              <Label>Expira em</Label>
+              <Input type="datetime-local" value={form.expires_at} onChange={(e) => setForm({ ...form, expires_at: e.target.value })} />
+            </div>
+          )}
+          <div>
+            <Label>Conteúdo</Label>
+            <Textarea rows={3} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} />
+          </div>
+          <Button onClick={create}><Plus className="h-4 w-4" /> Criar Aviso</Button>
+        </CardContent>
+      </Card>
+
+      <div className="space-y-2">
+        {(announcements ?? []).map((a: any) => (
+          <Card key={a.id} className="border-white/10 bg-card/50">
+            <CardContent className="p-4 flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${priorityColors[a.priority] ?? ""}`}>
+                    {a.priority}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {a.type} · {new Date(a.created_at).toLocaleDateString("pt-BR")}
+                  </span>
+                </div>
+                <h3 className="font-semibold mt-1">{a.title}</h3>
+                <p className="text-sm text-muted-foreground">{a.content}</p>
+                {a.expires_at && (
+                  <p className="text-xs text-amber-400 mt-1">Expira: {new Date(a.expires_at).toLocaleDateString("pt-BR")}</p>
+                )}
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <Button size="sm" variant={a.active ? "outline" : "default"} onClick={() => toggleActive(a.id, a.active)}>
+                  {a.active ? "Desativar" : "Ativar"}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => remove(a.id)}>
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
   );
 }
 
 // ============ USERS ============
-function AdminUsers() {
+function UsersTab() {
   const qc = useQueryClient();
-  const { data: profiles } = useQuery({
-    queryKey: ["admin-users"],
-    queryFn: async () =>
-      (
-        await supabase
-          .from("profiles")
-          .select("id, username, display_name, is_premium, premium_until, created_at")
-          .order("created_at", { ascending: false })
-          .limit(100)
-      ).data ?? [],
+  const [search, setSearch] = useState("");
+
+  const { data: users } = useQuery({
+    queryKey: ["admin-users", search],
+    queryFn: async () => {
+      let query = supabase
+        .from("profiles")
+        .select("id, username, display_name, is_premium, premium_until, created_at, avatar_url")
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (search) {
+        query = query.or(`username.ilike.%${search}%,display_name.ilike.%${search}%`);
+      }
+      const { data } = await query;
+      return (data ?? []) as any[];
+    },
   });
+
   const { data: roles } = useQuery({
     queryKey: ["admin-user-roles"],
     queryFn: async () => (await supabase.from("user_roles").select("*")).data ?? [],
   });
 
-  async function toggleAdmin(uid: string, isCurrentlyAdmin: boolean) {
-    if (isCurrentlyAdmin) {
-      await supabase.from("user_roles").delete().eq("user_id", uid).eq("role", "admin");
-    } else {
-      await supabase.from("user_roles").insert({ user_id: uid, role: "admin" });
-    }
-    qc.invalidateQueries({ queryKey: ["admin-user-roles"] });
-    toast.success("Atualizado");
-  }
-  async function togglePremium(uid: string, current: boolean) {
-    const until = new Date();
-    until.setFullYear(until.getFullYear() + 100);
-    await supabase
-      .from("profiles")
-      .update({ is_premium: !current, premium_until: !current ? until.toISOString() : null })
-      .eq("id", uid);
-    qc.invalidateQueries({ queryKey: ["admin-users"] });
-  }
+  const adminIds = new Set((roles ?? []).filter((r: any) => r.role === "admin").map((r: any) => r.user_id));
 
-  const adminIds = new Set((roles ?? []).filter((r) => r.role === "admin").map((r) => r.user_id));
+  async function togglePremium(id: string, current: boolean) {
+    await adminApi("toggle-premium", { user_id: id, enabled: !current });
+    qc.invalidateQueries({ queryKey: ["admin-users"] });
+    toast.success(current ? "Premium removido" : "Premium concedido");
+  }
 
   return (
-    <Card className="border-white/10 bg-card/50">
-      <CardContent className="p-6">
-        <div className="space-y-2">
-          {(profiles ?? []).map((p) => {
-            const isAdmin = adminIds.has(p.id);
-            return (
-              <div
-                key={p.id}
-                className="flex items-center justify-between p-3 rounded-lg border border-white/10"
-              >
-                <div>
-                  <div className="font-medium">
-                    {p.display_name ?? p.username ?? "—"}{" "}
-                    {isAdmin && (
-                      <Badge className="ml-1 bg-primary text-primary-foreground text-[10px]">
-                        ADMIN
-                      </Badge>
-                    )}{" "}
-                    {p.is_premium && (
-                      <Badge className="ml-1 bg-gradient-to-r from-primary to-accent border-0 text-[10px]">
-                        PREMIUM
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    @{p.username} · cadastrado {new Date(p.created_at).toLocaleDateString("pt-BR")}
-                  </div>
+    <div className="space-y-4">
+      <h2 className="text-lg font-semibold flex items-center gap-2">
+        <Users className="h-5 w-5" /> Usuários
+      </h2>
+      <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nome ou username..." />
+      <div className="space-y-2">
+        {(users ?? []).map((p: any) => (
+          <Card key={p.id} className="border-white/10 bg-card/50">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
+                <div className="font-medium flex items-center gap-2">
+                  {p.display_name ?? p.username ?? "—"}
+                  {adminIds.has(p.id) && <Badge className="bg-primary/20 text-primary text-[10px]">ADMIN</Badge>}
+                  {p.is_premium && <Badge className="bg-gradient-to-r from-primary to-accent border-0 text-[10px]">PREMIUM</Badge>}
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => togglePremium(p.id, p.is_premium)}
-                  >
-                    {p.is_premium ? "Remover Premium" : "Dar Premium"}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={isAdmin ? "destructive" : "outline"}
-                    onClick={() => toggleAdmin(p.id, isAdmin)}
-                  >
-                    {isAdmin ? "Remover admin" : "Tornar admin"}
-                  </Button>
+                <p className="text-xs text-muted-foreground">@{p.username} · {new Date(p.created_at).toLocaleDateString("pt-BR")}</p>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => togglePremium(p.id, p.is_premium)}>
+                {p.is_premium ? "Remover Premium" : "Dar Premium"}
+              </Button>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============ LOGS ============
+function LogsTab() {
+  const [page, setPage] = useState(0);
+  const [filter, setFilter] = useState("");
+
+  const { data: logs } = useQuery({
+    queryKey: ["admin-logs", page, filter],
+    queryFn: async () => {
+      let query = (supabase as any)
+        .from("audit_logs_new")
+        .select("*, profiles!audit_logs_new_actor_id_fkey(username, display_name)")
+        .order("created_at", { ascending: false })
+        .range(page * 50, (page + 1) * 50 - 1);
+      if (filter) query = query.ilike("action", `%${filter}%`);
+      const { data } = await query;
+      return (data ?? []) as any[];
+    },
+  });
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-lg font-semibold flex items-center gap-2">
+        <FileText className="h-5 w-5" /> Logs do Sistema
+      </h2>
+      <Input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filtrar por ação (ex: ticket, login, payment)..." />
+      <Card className="border-white/10 bg-card/50">
+        <CardContent className="p-4">
+          <div className="space-y-1 max-h-[60vh] overflow-y-auto">
+            {(logs ?? []).map((log: any) => (
+              <div key={log.id} className="flex items-start gap-3 p-2 rounded-lg hover:bg-white/5 text-sm">
+                <Activity className="h-3 w-3 mt-1 text-muted-foreground" />
+                <div className="flex-1 min-w-0">
+                  <span className="font-mono text-xs text-primary">{log.action}</span>
+                  <span className="text-muted-foreground"> — {log.entity_type}</span>
+                  {log.entity_id && <span className="text-muted-foreground"> #{log.entity_id.slice(0, 8)}</span>}
+                  <div className="text-[10px] text-muted-foreground">
+                    {log.profiles?.username ?? "sistema"} · {new Date(log.created_at).toLocaleString("pt-BR")}
+                  </div>
                 </div>
               </div>
-            );
-          })}
-        </div>
+            ))}
+            {(logs ?? []).length === 0 && (
+              <p className="text-sm text-muted-foreground p-4 text-center">Nenhum log encontrado.</p>
+            )}
+          </div>
+          <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/10">
+            <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage(page - 1)}>Anterior</Button>
+            <span className="text-xs text-muted-foreground">Página {page + 1}</span>
+            <Button size="sm" variant="outline" disabled={(logs ?? []).length < 50} onClick={() => setPage(page + 1)}>Próxima</Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ============ STAFF MANAGEMENT ============
+function StaffTab() {
+  const qc = useQueryClient();
+
+  const { data: staff } = useQuery({
+    queryKey: ["admin-staff"],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("staff_members")
+        .select("*, profiles!staff_members_user_id_fkey(username, display_name)")
+        .order("granted_at", { ascending: false });
+      return (data ?? []) as any[];
+    },
+  });
+
+  const [newUserId, setNewUserId] = useState("");
+  const [newRole, setNewRole] = useState("support");
+  const [adding, setAdding] = useState(false);
+
+  async function addStaff() {
+    if (!newUserId) return;
+    setAdding(true);
+    try {
+      await adminApi("add-staff", {
+        user_id: newUserId,
+        role: newRole,
+        permissions: getDefaultPermissions(newRole),
+      });
+    } catch (error) {
+      setAdding(false);
+      toast.error(error instanceof Error ? error.message : "Erro ao adicionar staff");
+      return;
+    }
+    setAdding(false);
+    toast.success("Staff adicionado!");
+    setNewUserId("");
+    qc.invalidateQueries({ queryKey: ["admin-staff"] });
+  }
+
+  async function removeStaff(id: string) {
+    if (!confirm("Remover membro da staff?")) return;
+    await adminApi("remove-staff", { id });
+    qc.invalidateQueries({ queryKey: ["admin-staff"] });
+    toast.success("Staff removido");
+  }
+
+  function getDefaultPermissions(role: string): string[] {
+    switch (role) {
+      case "moderator":
+        return ["tickets.read", "tickets.respond", "tickets.resolve", "users.read", "users.warn", "logs.read", "disputes.resolve"];
+      case "support":
+        return ["tickets.read", "tickets.respond"];
+      case "seller":
+        return ["shop.products.manage"];
+      default:
+        return [];
+    }
+  }
+
+  const roleBadges: Record<string, string> = {
+    owner: "bg-amber-500/20 text-amber-400",
+    moderator: "bg-blue-500/20 text-blue-400",
+    support: "bg-green-500/20 text-green-400",
+    seller: "bg-purple-500/20 text-purple-400",
+  };
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-lg font-semibold flex items-center gap-2">
+        <Shield className="h-5 w-5" /> Gerenciar Staff
+      </h2>
+
+      <Card className="border-white/10 bg-card/50">
+        <CardContent className="p-5 space-y-3">
+          <h3 className="font-medium">Adicionar Membro</h3>
+          <div className="flex gap-2">
+            <Input value={newUserId} onChange={(e) => setNewUserId(e.target.value)} placeholder="UUID do usuário" className="flex-1" />
+            <select
+              className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+              value={newRole}
+              onChange={(e) => setNewRole(e.target.value)}
+            >
+              <option value="support">Suporte</option>
+              <option value="moderator">Moderador</option>
+              <option value="seller">Vendedor</option>
+            </select>
+            <Button onClick={addStaff} disabled={adding}><Plus className="h-4 w-4" /> Adicionar</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="space-y-2">
+        {(staff ?? []).map((s: any) => (
+          <Card key={s.id} className="border-white/10 bg-card/50">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{s.profiles?.display_name ?? s.profiles?.username ?? "—"}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${roleBadges[s.role] ?? ""}`}>{s.role}</span>
+                  {!s.is_active && <span className="text-xs text-muted-foreground">(inativo)</span>}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Permissões: {s.permissions?.length ?? 0} · Desde {new Date(s.granted_at).toLocaleDateString("pt-BR")}
+                </p>
+              </div>
+              <Button size="sm" variant="ghost" onClick={() => removeStaff(s.id)}>
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============ SHOP (placeholder) ============
+function ShopTab() {
+  return (
+    <Card className="border-dashed border-white/10 bg-card/50">
+      <CardContent className="p-10 text-center text-muted-foreground">
+        <ShoppingBag className="h-10 w-10 mx-auto mb-3 opacity-50" />
+        <h3 className="font-semibold mb-2">Gerenciamento da Loja</h3>
+        <p className="text-sm">Sistema de vendedores e produtos será integrado aqui.</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============ SETTINGS (placeholder) ============
+function SettingsTab() {
+  return (
+    <Card className="border-dashed border-white/10 bg-card/50">
+      <CardContent className="p-10 text-center text-muted-foreground">
+        <Shield className="h-10 w-10 mx-auto mb-3 opacity-50" />
+        <h3 className="font-semibold mb-2">Configurações do Site</h3>
+        <p className="text-sm">Configurações gerais do sistema serão implementadas aqui.</p>
       </CardContent>
     </Card>
   );
