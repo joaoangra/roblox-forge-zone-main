@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { brl, calcOrderSplit } from "@/lib/marketplace";
+import { brl } from "@/lib/marketplace";
 import {
   Shield,
   Star,
@@ -78,7 +78,6 @@ function ListingPage() {
     );
 
   const l = listing;
-  const split = calcOrderSplit(l.price_cents);
 
   async function buy() {
     if (!user) {
@@ -90,29 +89,28 @@ function ListingPage() {
       return;
     }
     setBuying(true);
-    const { data: order, error } = await supabase
-      .from("marketplace_orders")
-      .insert({
-        listing_id: l.id,
-        buyer_id: user.id,
-        seller_id: l.seller_id,
-        amount_cents: l.price_cents,
-        gateway_fee_cents: split.gateway,
-        platform_fee_cents: split.platform,
-        seller_amount_cents: split.seller,
-        status: "awaiting_payment",
-      })
-      .select()
-      .single();
-    if (error || !order) {
+    const { data: session } = await supabase.auth.getSession();
+    const token = session.session?.access_token;
+    if (!token) {
       setBuying(false);
-      toast.error(error?.message ?? "Erro");
+      router.navigate({ to: "/auth" });
       return;
     }
-    await supabase
-      .from("marketplace_chat_rooms")
-      .insert({ order_id: order.id, buyer_id: user.id, seller_id: l.seller_id });
-    router.navigate({ to: "/market/orders/$id", params: { id: order.id } });
+    const response = await fetch("/marketplace/create-checkout-session", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ listing_id: l.id, buyer_id: user.id }),
+    });
+    const data = (await response.json()) as { url?: string; error?: string };
+    setBuying(false);
+    if (!response.ok || !data.url) {
+      toast.error(data.error ?? "Nao foi possivel iniciar o pagamento");
+      return;
+    }
+    window.location.href = data.url;
   }
 
   async function askQuestion() {
@@ -237,13 +235,13 @@ function ListingPage() {
                 className="w-full bg-gradient-to-r from-primary to-accent text-white border-0"
               >
                 <ShoppingCart className="h-4 w-4" />{" "}
-                {buying ? "Criando pedido…" : "Comprar agora (PIX)"}
+                {buying ? "Abrindo Stripe..." : "Comprar com pagamento seguro"}
               </Button>
               <div className="flex items-start gap-2 text-xs text-muted-foreground bg-primary/5 border border-primary/20 rounded-lg p-3">
                 <Shield className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
                 <span>
-                  Pagamento protegido por escrow. Liberamos pro vendedor só após 7 dias da
-                  confirmação de entrega.
+                  Pagamento protegido via Stripe. O saldo fica retido por 7 dias e trava se houver
+                  disputa.
                 </span>
               </div>
             </CardContent>

@@ -1,5 +1,5 @@
 import { createFileRoute, useRouter, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -21,6 +21,13 @@ export const Route = createFileRoute("/auth")({
 function AuthPage() {
   const { mode: initial } = Route.useSearch();
   const [mode, setMode] = useState<"signin" | "signup">(initial ?? "signin");
+
+  // Garante que ao navegar pelo header (ex.: Entrar x Criar conta)
+  // a aba do formulário reflita o modo da URL.
+  useEffect(() => {
+    setMode(initial ?? "signin");
+  }, [initial]);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -43,12 +50,23 @@ function AuthPage() {
           },
         });
         if (error) throw error;
-        toast.success("Conta criada! Você já está logado.");
+        toast.success("Conta criada! Agora faça login.");
+        toast.message(
+          "Antes de entrar, verifique seu e-mail. Abra a mensagem enviada para concluir a verificação."
+        );
+        setMode("signin");
+        setLoading(false);
+        return;
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        toast.success("Bem-vindo de volta!");
       }
+      // Aviso prático para quem tenta entrar sem confirmar e-mail.
+      // Se o Supabase rejeitar por e-mail não verificado, o toast.error() abaixo mostra o erro.
+      toast.message(
+        "Antes de tentar entrar, verifique seu e-mail (veja a mensagem que você recebeu)."
+      );
+      toast.success("Bem-vindo de volta!");
       await refresh();
       router.navigate({ to: "/dashboard" });
     } catch (err) {
@@ -127,7 +145,7 @@ function AuthPage() {
                     onClick={() => setShowPassword((v) => !v)}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   >
-                    {showPassword ? "🙈" : "👁️"}
+                    {showPassword ? "Ocultar" : "Mostrar"}
                   </button>
                 </div>
               </div>
@@ -145,22 +163,24 @@ function AuthPage() {
               {mode === "signin" ? (
                 <>
                   Não tem conta?{" "}
-                  <button
+                  <Link
+                    to="/auth"
+                    search={{ mode: "signup" }}
                     className="text-primary hover:underline"
-                    onClick={() => setMode("signup")}
                   >
                     Criar agora
-                  </button>
+                  </Link>
                 </>
               ) : (
                 <>
                   Já tem conta?{" "}
-                  <button
+                  <Link
+                    to="/auth"
+                    search={{ mode: "signin" }}
                     className="text-primary hover:underline"
-                    onClick={() => setMode("signin")}
                   >
                     Entrar
-                  </button>
+                  </Link>
                 </>
               )}
             </div>

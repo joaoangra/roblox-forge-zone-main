@@ -22,7 +22,7 @@ export const Route = createFileRoute("/premium")({
 });
 
 function PremiumPage() {
-  const { user, isPremium, refresh } = useAuth();
+  const { user, isPremium } = useAuth();
   const router = useRouter();
 
   const { data: plans, isLoading } = useQuery({
@@ -40,41 +40,43 @@ function PremiumPage() {
         id: string;
         name: string;
         description: string;
+        duration_days: number;
         price_brl: number;
         features?: string[] | null;
       }>;
     },
   });
 
-  async function buy(planId: string, amount: number) {
+  function lookupKeyForPlan(plan: { duration_days?: number; name?: string }) {
+    const text = `${plan.name ?? ""} ${plan.duration_days ?? ""}`.toLowerCase();
+    if (plan.duration_days === 90 || text.includes("90")) return "buxhub_premium_90d";
+    if (plan.duration_days === 60 || text.includes("60")) return "buxhub_premium_60d";
+    return "buxhub_premium_30d";
+  }
+
+  async function buy(plan: { duration_days?: number; name?: string }) {
     if (!user) {
       router.navigate({ to: "/auth" });
       return;
     }
 
     // Supabase não inferiu tipos no projeto atual.
-    const { data, error } = await supabase
-      .from("premium_orders")
-      .insert({
-        user_id: user.id,
-        plan_id: planId,
-        amount_brl: amount,
-        status: "pending",
-      })
-      .select("id")
-      .single();
-
-    if (error) {
-      toast.error(error.message);
+    const { data: session } = await supabase.auth.getSession();
+    const token = session.session?.access_token;
+    const response = await fetch("/create-checkout-session", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ lookup_key: lookupKeyForPlan(plan), user_id: user.id }),
+    });
+    const data = (await response.json().catch(() => ({}))) as { url?: string; error?: string };
+    if (!response.ok || !data.url) {
+      toast.error(data.error ?? "Nao foi possivel abrir o Stripe");
       return;
     }
-
-    await refresh();
-
-    router.navigate({
-      to: "/orders/$id",
-      params: { id: data.id },
-    });
+    window.location.href = data.url;
   }
 
   // Mantém a ordem vindo do banco (sort_order)
@@ -212,11 +214,11 @@ function PremiumPage() {
                       </div>
 
                       <Button
-                        onClick={() => buy(p.id, Number(p.price_brl))}
+                        onClick={() => buy(p)}
                         className="w-full mt-6 bg-gradient-to-r from-primary to-accent text-white border-0"
                       >
                         <Crown className="h-4 w-4" />
-                        Assinar com PIX
+                        Assinar com Stripe
                         <ArrowRight className="h-4 w-4 ml-1" />
                       </Button>
 

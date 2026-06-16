@@ -61,6 +61,8 @@ export type TicketCategory = "support" | "financial" | "dispute" | "sales" | "bu
 export type TicketStatus = "open" | "in_progress" | "waiting_user" | "resolved" | "closed";
 export type ReportTarget = "listing" | "user" | "review" | "message";
 
+export type SubscriptionStatus = "active" | "past_due" | "canceled" | "unpaid" | "incomplete" | "incomplete_expired" | "trialing" | "paused";
+
 type ProfileRow = {
   id: string;
   username: string | null;
@@ -69,6 +71,17 @@ type ProfileRow = {
   bio: string | null;
   is_premium: boolean;
   premium_until: string | null;
+  stripe_customer_id: string | null;
+  stripe_account_id: string | null;
+  stripe_subscription_id: string | null;
+  stripe_price_id: string | null;
+  subscription_status: SubscriptionStatus | null;
+  subscription_current_period_end: string | null;
+  is_seller: boolean;
+  seller_verified: boolean;
+  buyer_strikes: number;
+  suspended_until: string | null;
+  banned_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -310,6 +323,29 @@ type MarketplaceChatMessageRow = {
   attachment_type: string | null;
   system_message: boolean;
   created_at: string;
+};
+
+type TransactionRow = {
+  id: string;
+  buyer_id: string;
+  seller_id: string;
+  listing_id: string;
+  marketplace_order_id: string | null;
+  amount_cents: number;
+  platform_fee_cents: number;
+  seller_amount_cents: number;
+  currency: string;
+  status: "pending" | "held" | "disputed" | "released" | "refunded" | "cancelled";
+  release_at: string;
+  stripe_checkout_session_id: string | null;
+  stripe_payment_intent_id: string | null;
+  stripe_transfer_id: string | null;
+  stripe_refund_id: string | null;
+  disputed_at: string | null;
+  released_at: string | null;
+  refunded_at: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 type DisputeRow = {
@@ -564,6 +600,17 @@ export interface Database {
         MarketplaceChatMessageRow,
         Partial<MarketplaceChatMessageRow> & { room_id: string; sender_id: string }
       >;
+      transactions: Table<
+        TransactionRow,
+        Partial<TransactionRow> & {
+          buyer_id: string;
+          seller_id: string;
+          listing_id: string;
+          amount_cents: number;
+          seller_amount_cents: number;
+          release_at: string;
+        }
+      >;
       disputes: Table<
         DisputeRow,
         Partial<DisputeRow> & { order_id: string; opened_by: string; reason: string }
@@ -623,6 +670,11 @@ export interface Database {
         }
       >;
       audit_logs: Table<AuditLogRow, Partial<AuditLogRow> & { action: string }>;
+      webhook_events: Table<
+        { id: string; type: string; created_at: string },
+        { id: string; type: string },
+        Partial<{ id: string; type: string; created_at: string }>
+      >;
     };
     Views: Record<string, never>;
     Functions: {

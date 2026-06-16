@@ -67,6 +67,7 @@ function SellPage() {
 function SellerProfileTab() {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const [connecting, setConnecting] = useState(false);
   const { data: sp } = useQuery({
     queryKey: ["my-seller", user!.id],
     queryFn: async () =>
@@ -82,6 +83,17 @@ function SellerProfileTab() {
           .select("*")
           .eq("user_id", user!.id)
           .order("created_at", { ascending: false })
+          .maybeSingle()
+      ).data,
+  });
+  const { data: payProfile } = useQuery({
+    queryKey: ["seller-payment-profile", user!.id],
+    queryFn: async () =>
+      (
+        await supabase
+          .from("profiles")
+          .select("stripe_account_id, seller_verified")
+          .eq("id", user!.id)
           .maybeSingle()
       ).data,
   });
@@ -139,8 +151,76 @@ function SellerProfileTab() {
     }
   }
 
+  async function startStripeConnect() {
+    setConnecting(true);
+    const { data: session } = await supabase.auth.getSession();
+    const token = session.session?.access_token;
+    const response = await fetch("/marketplace/create-seller-account", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ user_id: user!.id, email: user!.email }),
+    });
+    const data = (await response.json().catch(() => ({}))) as { url?: string; error?: string };
+    setConnecting(false);
+    if (!response.ok || !data.url) {
+      toast.error(data.error ?? "Nao foi possivel abrir o Stripe Connect");
+      return;
+    }
+    window.location.href = data.url;
+  }
+
+  async function syncStripeConnect() {
+    setConnecting(true);
+    const { data: session } = await supabase.auth.getSession();
+    const token = session.session?.access_token;
+    const response = await fetch("/marketplace/sync-seller-account", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ user_id: user!.id }),
+    });
+    const data = (await response.json().catch(() => ({}))) as {
+      seller_verified?: boolean;
+      error?: string;
+    };
+    setConnecting(false);
+    if (!response.ok) {
+      toast.error(data.error ?? "Nao foi possivel sincronizar o Stripe");
+      return;
+    }
+    toast.success(data.seller_verified ? "Stripe Connect verificado" : "Stripe ainda pendente");
+    qc.invalidateQueries();
+  }
+
   return (
     <div className="grid lg:grid-cols-2 gap-4">
+      <Card>
+        <CardContent className="p-6 space-y-4">
+          <h2 className="font-semibold flex items-center gap-2">
+            <BadgeCheck className="h-5 w-5 text-primary" /> Stripe Connect
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Necessario para receber vendas do marketplace. A plataforma cobra 6% e libera o saldo
+            apos 7 dias, salvo disputa.
+          </p>
+          <Badge variant="outline">
+            {payProfile?.seller_verified ? "Pronto para receber" : "Configuracao pendente"}
+          </Badge>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={startStripeConnect} disabled={connecting}>
+              {payProfile?.stripe_account_id ? "Reabrir onboarding" : "Conectar Stripe"}
+            </Button>
+            <Button onClick={syncStripeConnect} disabled={connecting} variant="outline">
+              Sincronizar status
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
       <Card>
         <CardContent className="p-6 space-y-4">
           <h2 className="font-semibold flex items-center gap-2">

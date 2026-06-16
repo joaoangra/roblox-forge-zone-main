@@ -37,9 +37,73 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   });
 }
 
+async function handleApiRequest(request: Request): Promise<Response | null> {
+  const pathname = new URL(request.url).pathname;
+
+  if (pathname === "/create-checkout-session") {
+    const { handleCreateCheckoutSession } = await import("./stripe/checkout");
+    return handleCreateCheckoutSession(request);
+  }
+
+  if (pathname === "/webhook") {
+    const { handleStripeWebhook } = await import("./stripe/webhook");
+    return handleStripeWebhook(request);
+  }
+
+  if (pathname === "/verify-subscription") {
+    const { handleVerifySubscription } = await import("./stripe/webhook");
+    return handleVerifySubscription(request);
+  }
+
+  if (pathname === "/marketplace/create-checkout-session") {
+    const { handleCreateMarketplaceCheckoutSession } = await import("./stripe/checkout");
+    return handleCreateMarketplaceCheckoutSession(request);
+  }
+
+  if (pathname === "/marketplace/create-seller-account") {
+    const { handleCreateSellerAccount } = await import("./marketplace/transactions");
+    return handleCreateSellerAccount(request);
+  }
+
+  if (pathname === "/marketplace/sync-seller-account") {
+    const { handleSyncSellerAccount } = await import("./marketplace/transactions");
+    return handleSyncSellerAccount(request);
+  }
+
+  if (pathname === "/marketplace/mark-delivered") {
+    const { handleMarkDelivered } = await import("./marketplace/transactions");
+    return handleMarkDelivered(request);
+  }
+
+  if (pathname === "/marketplace/release-order") {
+    const { handleReleaseOrder } = await import("./marketplace/transactions");
+    return handleReleaseOrder(request);
+  }
+
+  if (pathname === "/marketplace/release-due-payouts") {
+    const { handleReleaseDuePayouts } = await import("./marketplace/payouts");
+    return handleReleaseDuePayouts(request);
+  }
+
+  if (pathname === "/tickets/open-dispute") {
+    const { handleOpenDispute } = await import("./tickets/disputes");
+    return handleOpenDispute(request);
+  }
+
+  if (pathname === "/tickets/resolve-dispute") {
+    const { handleResolveDispute } = await import("./tickets/disputes");
+    return handleResolveDispute(request);
+  }
+
+  return null;
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      const apiResponse = await handleApiRequest(request);
+      if (apiResponse) return apiResponse;
+
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
