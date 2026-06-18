@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Image, LifeBuoy, Paperclip, Plus, Send } from "lucide-react";
+import { CheckCircle2, Circle, Clock, Image, LifeBuoy, Loader2, Paperclip, Plus, Send, XCircle } from "lucide-react";
 
 export const Route = createFileRoute("/tickets")({
   head: () => ({ meta: [{ title: "Suporte — RBXScripts" }] }),
@@ -57,6 +57,7 @@ function TicketsPage() {
     subject: string;
     category: string;
     status: string;
+    created_at?: string;
   };
 
   type TicketMessageRow = {
@@ -66,6 +67,14 @@ function TicketsPage() {
     body: string;
     attachment_url: string | null;
     created_at?: string;
+  };
+
+  const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
+    open: { label: "Aberto", color: "text-green-400 border-green-400/30", icon: Circle },
+    in_progress: { label: "Em andamento", color: "text-blue-400 border-blue-400/30", icon: Loader2 },
+    waiting_user: { label: "Aguardando você", color: "text-yellow-400 border-yellow-400/30", icon: Clock },
+    resolved: { label: "Resolvido", color: "text-green-500 border-green-500/30", icon: CheckCircle2 },
+    closed: { label: "Fechado", color: "text-muted-foreground border-white/10", icon: XCircle },
   };
 
   async function uploadSupportAttachment(file: File | null) {
@@ -84,18 +93,21 @@ function TicketsPage() {
     return data.path;
   }
 
+  const selectedTicket = tickets?.find((t: TicketRow) => t.id === selected);
+
   const { data: tickets } = useQuery({
     queryKey: ["tickets", user?.id],
     enabled: !!user,
     queryFn: async () => {
       const res = await supabase
         .from("tickets")
-        .select("id, subject, category, status")
+        .select("id, subject, category, status, created_at")
         .eq("user_id", user!.id)
         .order("created_at", { ascending: false });
 
       return (res.data ?? []) as TicketRow[];
     },
+    refetchInterval: 10000,
   });
 
   const { data: msgs } = useQuery({
@@ -104,13 +116,13 @@ function TicketsPage() {
     queryFn: async () => {
       const res = await supabase
         .from("ticket_messages")
-        .select("id, ticket_id, sender_id, body, attachment_url")
+        .select("id, ticket_id, sender_id, body, attachment_url, created_at")
         .eq("ticket_id", selected!)
         .order("created_at");
 
       return (res.data ?? []) as TicketMessageRow[];
     },
-    refetchInterval: 5000,
+    refetchInterval: 3000,
   });
 
   if (!user) return null;
@@ -159,9 +171,20 @@ function TicketsPage() {
       body: reply || "Print anexado",
       attachment_url,
     });
+    if (selectedTicket?.status === "waiting_user") {
+      await supabase.from("tickets").update({ status: "open" }).eq("id", selected);
+    }
     setReply("");
     setReplyFile(null);
     qc.invalidateQueries({ queryKey: ["t-msgs", selected] });
+    qc.invalidateQueries({ queryKey: ["tickets"] });
+  }
+
+  async function closeTicket(status: "resolved" | "closed") {
+    if (!selected) return;
+    await supabase.from("tickets").update({ status }).eq("id", selected);
+    qc.invalidateQueries({ queryKey: ["tickets"] });
+    toast.success(status === "resolved" ? "Ticket marcado como resolvido" : "Ticket fechado");
   }
 
   return (
@@ -224,7 +247,10 @@ function TicketsPage() {
         <div className="grid lg:grid-cols-[300px_1fr] gap-4">
           <div className="space-y-2">
             {tickets?.length ? (
-              tickets.map((t) => (
+              tickets.map((t) => {
+                const sc = statusConfig[t.status] ?? statusConfig.closed;
+                const Icon = sc.icon;
+                return (
                 <button
                   key={t.id}
                   onClick={() => setSelected(t.id)}
@@ -240,32 +266,54 @@ function TicketsPage() {
                     <Badge variant="outline" className="text-[10px] capitalize">
                       {t.category}
                     </Badge>
-                    <Badge variant="outline" className="text-[10px] capitalize">
-                      {t.status}
+                    <Badge variant="outline" className={"text-[10px] capitalize " + sc.color}>
+                      <Icon className="h-3 w-3 inline mr-0.5" /> {sc.label}
                     </Badge>
                   </div>
+                  {t.created_at && (
+                    <div className="text-[10px] text-muted-foreground mt-1">
+                      {new Date(t.created_at).toLocaleString("pt-BR")}
+                    </div>
+                  )}
                 </button>
-              ))
+                );
+              })
             ) : (
               <p className="text-sm text-muted-foreground p-4">Nenhum ticket.</p>
             )}
           </div>
 
-          {selected && (
-            <Card className="flex flex-col h-[60vh]">
-              <div className="border-b border-white/10 p-3 text-xs text-muted-foreground flex gap-2">
-                <LifeBuoy className="h-4 w-4 text-primary shrink-0" />
-                <span>
-                  Descreva seu problema com detalhes, envie prints quando possível e evite abrir
-                  múltiplos tickets sobre o mesmo caso.
-                </span>
+          {selected && selectedTicket && (() => {
+            const sc = statusConfig[selectedTicket.status] ?? statusConfig.closed;
+            const StatusIcon = sc.icon;
+            const isClosed = selectedTicket.status === "closed" || selectedTicket.status === "resolved";
+            return (
+            <Card className="flex flex-col h-[65vh]">
+              <div className="border-b border-white/10 p-3 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm">
+                  <StatusIcon className={"h-4 w-4 " + sc.color} />
+                  <span className="font-semibold">{selectedTicket.subject}</span>
+                  <Badge variant="outline" className={"text-[10px] capitalize " + sc.color}>
+                    {sc.label}
+                  </Badge>
+                </div>
+                {!isClosed && (
+                  <div className="flex gap-1">
+                    <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => closeTicket("resolved")}>
+                      <CheckCircle2 className="h-3 w-3 mr-1" /> Resolvido
+                    </Button>
+                    <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => closeTicket("closed")}>
+                      <XCircle className="h-3 w-3 mr-1" /> Fechar
+                    </Button>
+                  </div>
+                )}
               </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {msgs?.map((m) => (
                   <div
                     key={m.id}
                     className={
-                      "flex " + (m.sender_id === user!.id ? "justify-end" : "justify-start")
+                      "flex flex-col " + (m.sender_id === user!.id ? "items-end" : "items-start")
                     }
                   >
                     <div
@@ -278,14 +326,20 @@ function TicketsPage() {
                     >
                       {m.body}
                       {m.attachment_url && (
-                        <span className="mt-2 flex items-center gap-1 text-xs opacity-80">
+                        <div className="mt-2 flex items-center gap-1 text-xs opacity-80">
                           <Image className="h-3 w-3" /> Print anexado
-                        </span>
+                        </div>
                       )}
                     </div>
+                    {m.created_at && (
+                      <div className="text-[10px] text-muted-foreground mt-0.5 px-1">
+                        {new Date(m.created_at).toLocaleString("pt-BR")}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
+              {!isClosed && (
               <div className="border-t border-white/10 p-3 flex gap-2">
                 <Textarea
                   rows={1}
@@ -293,13 +347,20 @@ function TicketsPage() {
                   onChange={(e) => setReply(e.target.value)}
                   placeholder="Responder…"
                   className="resize-none"
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply(); } }}
                 />
+                <label className="cursor-pointer flex items-center justify-center h-9 w-9 rounded-md border border-input hover:bg-accent">
+                  <Paperclip className="h-4 w-4" />
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => setReplyFile(e.target.files?.[0] ?? null)} />
+                </label>
                 <Button onClick={sendReply}>
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
+              )}
             </Card>
-          )}
+            );
+          })()}
         </div>
       </div>
     </PageShell>

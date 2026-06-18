@@ -5,41 +5,47 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-const DATABASE_URL =
-  "postgresql://postgres:Joao%4030062008%2B@db.kskxlrmwpudqhpbfxvuv.supabase.co:5432/postgres";
-const decodedUrl = DATABASE_URL.replace(/%40/g, "@").replace(/%2B/g, "+");
-
 const { Client } = pg;
 
 const migrations = [
-  "20260616050300_community_tables.sql",
-  "20260616050200_fix_support_views.sql",
-  "20260616050400_admin_roles_security.sql",
+  "20260617000400_fix_has_role_function.sql",
+  "20260618000100_marketplace_professional_hardening.sql",
 ];
 
+function getDatabaseUrl() {
+  if (!process.env.DATABASE_URL) {
+    throw new Error("Missing DATABASE_URL. Set it in your shell or .env runner before applying migrations.");
+  }
+  return process.env.DATABASE_URL;
+}
+
 async function main() {
-  const client = new Client({ connectionString: decodedUrl });
+  const client = new Client({ connectionString: getDatabaseUrl() });
   await client.connect();
-  console.log("✅ Conectado ao banco\n");
+  console.log("Connected to database");
 
   for (const file of migrations) {
-    const filePath = path.join(__dirname, "..", "supabase/migrations", file);
+    const filePath = path.join(__dirname, "..", "supabase", "migrations", file);
     if (!fs.existsSync(filePath)) {
-      console.log(`⚠️  ${file} não encontrado, pulando...`);
+      console.log(`${file} not found, skipping`);
       continue;
     }
+
     const sql = fs.readFileSync(filePath, "utf8");
-    console.log(`📦 Aplicando: ${file}...`);
-    await client.query(sql);
-    console.log(`✅ ${file} aplicado\n`);
+    console.log(`Applying ${file}...`);
+    try {
+      await client.query(sql);
+      console.log(`Applied ${file}`);
+    } catch (err) {
+      console.log(`Skipped ${file}: ${err.message}`);
+    }
   }
 
   await client.end();
-  console.log("🎉 Todas as migrações aplicadas com sucesso!");
+  console.log("Migrations finished");
 }
 
 main().catch((err) => {
-  console.error("❌ Erro:", err.message);
+  console.error("Migration failed:", err.message);
   process.exit(1);
 });

@@ -33,9 +33,7 @@ function extractCustomerId(
   return typeof customer === "string" ? customer : customer.id;
 }
 
-function extractSubscriptionId(
-  subscription: string | Stripe.Subscription | null,
-): string | null {
+function extractSubscriptionId(subscription: string | Stripe.Subscription | null): string | null {
   if (!subscription) return null;
   return typeof subscription === "string" ? subscription : subscription.id;
 }
@@ -61,7 +59,12 @@ function logWebhookEvent(eventType: string, eventId: string, extra?: Record<stri
   }
 }
 
-function logWebhookError(eventType: string, eventId: string, error: unknown, extra?: Record<string, unknown>) {
+function logWebhookError(
+  eventType: string,
+  eventId: string,
+  error: unknown,
+  extra?: Record<string, unknown>,
+) {
   console.error(
     JSON.stringify({
       level: "error",
@@ -91,12 +94,13 @@ export async function handleStripeWebhook(request: Request) {
   const rawBody = await request.text();
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(rawBody, signature, getRequiredEnv("STRIPE_WEBHOOK_SECRET"));
+    event = stripe.webhooks.constructEvent(
+      rawBody,
+      signature,
+      getRequiredEnv("STRIPE_WEBHOOK_SECRET"),
+    );
   } catch (error) {
-    console.error("========== WEBHOOK SIGNATURE ERROR ==========");
-    console.error(error);
-    console.error("STRIPE_WEBHOOK_SECRET:", process.env.STRIPE_WEBHOOK_SECRET ? "EXISTS" : "MISSING");
-    console.error("=============================================");
+    logWebhookError("signature_verification", "unknown", error);
 
     return json(
       {
@@ -301,7 +305,9 @@ async function onSubscriptionDeleted(subscription: Stripe.Subscription) {
 
   const resolvedUserId = userId ?? (await findUserIdByCustomer(customerId));
   if (!resolvedUserId) {
-    logWebhookEvent("customer.subscription.deleted", subscription.id, { warning: "user_not_found" });
+    logWebhookEvent("customer.subscription.deleted", subscription.id, {
+      warning: "user_not_found",
+    });
     return;
   }
 
@@ -426,7 +432,10 @@ async function grantPremium(input: {
 }) {
   const userId = input.userId || (await findUserIdByCustomer(input.customerId));
   if (!userId) {
-    logWebhookEvent("grant_premium", "unknown", { warning: "user_not_found", customerId: input.customerId });
+    logWebhookEvent("grant_premium", "unknown", {
+      warning: "user_not_found",
+      customerId: input.customerId,
+    });
     return;
   }
 
@@ -484,10 +493,7 @@ async function revokePremium(input: { userId?: string; customerId?: string }) {
     .eq("id", userId)
     .maybeSingle();
 
-  if (
-    profile?.subscription_status === "canceled" ||
-    profile?.subscription_status === "unpaid"
-  ) {
+  if (profile?.subscription_status === "canceled" || profile?.subscription_status === "unpaid") {
     return;
   }
 
@@ -531,8 +537,7 @@ export async function handleVerifySubscription(request: Request) {
       }
 
       const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-      const resolvedUserId =
-        session.metadata?.user_id ?? session.client_reference_id ?? null;
+      const resolvedUserId = session.metadata?.user_id ?? session.client_reference_id ?? null;
 
       if (!resolvedUserId) {
         return json({ error: "No user_id in session metadata" }, { status: 404 });

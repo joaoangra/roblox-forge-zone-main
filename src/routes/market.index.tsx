@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ShoppingBag, Search, Star, Plus, Package, Ticket, Briefcase } from "lucide-react";
+import { ShoppingBag, Search, Star, Plus, Package, Ticket, Briefcase, Crown } from "lucide-react";
 import { brl } from "@/lib/marketplace";
 
 export const Route = createFileRoute("/market/")({
@@ -118,6 +118,22 @@ function MarketIndex() {
             );
           })}
         </div>
+
+        {/* Premium upsell */}
+        <Link to="/premium" className="block mb-6 group">
+          <div className="bg-gradient-to-r from-yellow-500/10 via-yellow-500/5 to-transparent border border-yellow-500/20 rounded-xl p-4 flex items-center gap-3 group-hover:border-yellow-500/40 transition-colors">
+            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-yellow-500 to-orange-500 grid place-items-center">
+              <Crown className="h-5 w-5 text-white" />
+            </div>
+            <div className="flex-1">
+              <div className="font-semibold text-sm">Desbloqueie o plano Premium</div>
+              <div className="text-xs text-muted-foreground">Taxas reduzidas, destaque nos anúncios e suporte prioritário por apenas R$ 19,90/mês.</div>
+            </div>
+            <Button variant="outline" size="sm" className="border-yellow-500/30 text-yellow-500 shrink-0">
+              Ver planos
+            </Button>
+          </div>
+        </Link>
 
         {isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

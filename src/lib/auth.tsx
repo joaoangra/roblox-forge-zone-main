@@ -1,8 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-
-export type StaffRole = "owner" | "moderator" | "support" | "seller" | null;
+import { canUsePermission, defaultPermissions, isOwnerOnlyPermission, type StaffRole, ROLE_LEVEL, OWNER_ONLY_PERMISSIONS } from "./authz";
 
 type Profile = {
   id: string;
@@ -30,6 +29,7 @@ type AuthCtx = {
   isOwner: boolean;
   isStaff: boolean;
   hasPermission: (perm: string) => boolean;
+  roleLabel: string;
   refresh: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -45,6 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   async function loadExtras(uid: string) {
+    // Always query staff_members since it's now properly seeded
     const [profileResult, rolesResult, staffResult] = await Promise.allSettled([
       supabase
         .from("profiles")
@@ -61,9 +62,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ]);
 
     try {
-      const p = profileResult.status === "fulfilled" ? profileResult.value.data : null;
-      const r = rolesResult.status === "fulfilled" ? rolesResult.value.data : null;
-      const s = staffResult.status === "fulfilled" ? staffResult.value.data : null;
+      const p = profileResult.status === "fulfilled" ? (profileResult.value as any).data ?? null : null;
+      const r = rolesResult.status === "fulfilled" ? (rolesResult.value as any).data ?? null : null;
+      const s = staffResult.status === "fulfilled" ? (staffResult.value as any).data ?? null : null;
 
       if (profileResult.status === "rejected") {
         console.error("[auth] profile load failed", profileResult.reason);
@@ -75,15 +76,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error("[auth] staff_members load failed", staffResult.reason);
       }
 
-      setProfile((p as Profile) ?? null);
-      setIsAdmin(!!r?.some((x: { role: string }) => x.role === "admin"));
+      setProfile(p as Profile | null);
+
+      const hasLegacyAdmin = !!r?.some((x: { role: string }) => x.role === "admin");
+      setIsAdmin(hasLegacyAdmin || s?.role === "owner" || s?.role === "admin" || s?.role === "moderator");
 
       if (s) {
-        const staffData = s as { role: string; permissions: string[]; is_active: boolean };
         setStaff({
-          role: staffData.role as StaffRole,
-          permissions: staffData.permissions ?? [],
-          isActive: staffData.is_active,
+          role: s.role as StaffRole,
+          permissions: s.permissions ?? [],
+          isActive: s.is_active,
+        });
+      } else if (hasLegacyAdmin) {
+        setStaff({
+          role: "admin" as StaffRole,
+          permissions: defaultPermissions("admin"),
+          isActive: true,
         });
       } else {
         setStaff(null);
@@ -133,15 +141,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       (!profile.premium_until || new Date(profile.premium_until) > new Date())
     ) || isAdmin;
 
-  const isOwner = isAdmin || staff?.role === "owner";
+  const isOwner = staff?.role === "owner";
   const isStaff = isAdmin || !!staff;
 
   const hasPermission = (perm: string): boolean => {
-    if (isAdmin) return true;
-    if (isOwner) return true;
-    if (!staff) return false;
-    return staff.permissions.includes(perm);
+    return canUsePermission({
+      isOwner,
+      staffRole: staff?.role ?? null,
+      permissions: staff?.permissions ?? null,
+      permission: perm,
+    });
   };
+
+  const roleLabel = isOwner
+    ? "Owner"
+    : staff?.role === "admin" || isAdmin
+      ? "Admin"
+      : staff?.role === "moderator"
+        ? "Moderador"
+        : staff?.role === "staff" || staff?.role === "support"
+          ? "Staff"
+          : staff?.role === "helper"
+            ? "Helper"
+            : staff?.role === "official_seller"
+              ? "Vendedor Oficial"
+              : staff?.role === "seller"
+                ? "Vendedor"
+                : (staff?.role ?? "Usuário");
 
   const value: AuthCtx = {
     user,
@@ -154,6 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isOwner,
     isStaff,
     hasPermission,
+    roleLabel,
     refresh: async () => {
       if (user) await loadExtras(user.id);
     },

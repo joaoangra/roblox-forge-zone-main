@@ -213,11 +213,21 @@ async function closeDisputeTickets(transactionId: string, adminId: string | null
 }
 
 async function isAdmin(userId: string) {
-  const { data } = await supabaseAdmin
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .eq("role", "admin")
-    .maybeSingle();
-  return data?.role === "admin";
+  // Check both legacy user_roles and staff_members
+  const [{ data: roles }, { data: staff }] = await Promise.all([
+    supabaseAdmin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("role", "admin")
+      .maybeSingle(),
+    supabaseAdmin
+      .from("staff_members")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("is_active", true)
+      .in("role", ["owner", "admin", "moderator"])
+      .maybeSingle(),
+  ]);
+  return roles?.role === "admin" || !!staff;
 }

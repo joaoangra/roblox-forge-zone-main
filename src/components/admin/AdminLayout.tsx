@@ -1,8 +1,8 @@
-import { useRouter } from "@tanstack/react-router";
+﻿import { useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { adminApi } from "@/lib/adminApi";
 import { PageShell } from "@/components/site/PageShell";
 import {
   Shield,
@@ -16,7 +16,7 @@ import {
   ShoppingBag,
   Megaphone,
   ChevronDown,
-  AlertCircle,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,8 +28,11 @@ type TabId =
   | "users"
   | "logs"
   | "staff"
+  | "approvals"
+  | "finance"
   | "shop"
-  | "settings";
+  | "settings"
+  | "technical";
 
 interface Props {
   activeTab: TabId;
@@ -44,46 +47,60 @@ const NAV_ITEMS: { id: TabId; label: string; icon: React.ElementType; permission
   { id: "users", label: "Usuários", icon: Users, permission: "users.read" },
   { id: "logs", label: "Logs", icon: FileText, permission: "logs.read" },
   { id: "staff", label: "Staff", icon: Shield, permission: "staff.manage" },
-  { id: "shop", label: "Loja", icon: ShoppingBag },
+  { id: "approvals", label: "Aprovações", icon: Check, permission: "listings.approve" },
+  { id: "finance", label: "Financeiro", icon: Users, permission: "finance.read" },
+  { id: "shop", label: "Loja Smiley", icon: ShoppingBag, permission: "shop.smiley.manage" },
   { id: "settings", label: "Config", icon: Settings, permission: "settings.read" },
+  { id: "technical", label: "Técnico", icon: Settings, permission: "technical.read" },
 ];
 
 export function AdminLayout({ activeTab, onTabChange, children }: Props) {
-  const { user, isAdmin, isOwner, isStaff, staff, hasPermission, signOut, loading } = useAuth();
+  const { user, isAdmin, isOwner, isStaff, roleLabel, hasPermission, signOut, loading } = useAuth();
   const router = useRouter();
+  const qc = useQueryClient();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const { data: notifCount } = useQuery({
-    queryKey: ["admin-notif-count"],
+  const { data: summary } = useQuery({
+    queryKey: ["admin-layout-summary"],
     refetchInterval: 10000,
     enabled: isAdmin || isStaff || isOwner,
-    queryFn: async () => {
-      const { count } = await supabase
-        .from("admin_notifications")
-        .select("*", { count: "exact", head: true })
-        .eq("read", false);
-      return count ?? 0;
-    },
+    queryFn: async () =>
+      adminApi<{
+        openTickets: number;
+        unreadNotifications: number;
+      }>("dashboard-summary"),
   });
 
-  const { data: openTickets } = useQuery({
-    queryKey: ["admin-open-tickets-count"],
-    refetchInterval: 15000,
-    enabled: isAdmin || isStaff || isOwner,
-    queryFn: async () => {
-      const { count } = await supabase
-        .from("tickets")
-        .select("*", { count: "exact", head: true })
-        .in("status", ["open", "in_progress", "waiting_user"]);
-      return count ?? 0;
-    },
-  });
+
 
   useEffect(() => {
-    if (!loading && (!user || (!isAdmin && !isStaff && !isOwner))) {
+    // Evita redirect “prematuro” enquanto o AuthProvider ainda está carregando.
+    if (loading) return;
+
+    if (!user) {
+      router.navigate({ to: "/" });
+      return;
+    }
+
+    if (!isAdmin && !isStaff && !isOwner) {
       router.navigate({ to: "/" });
     }
   }, [loading, user, isAdmin, isStaff, isOwner, router]);
+
+
+  useEffect(() => {
+    const item = NAV_ITEMS.find((nav) => nav.id === activeTab);
+    if (!item) return;
+    if (item.permission && !isOwner && !hasPermission(item.permission)) onTabChange("dashboard");
+    if (item.id === "settings" && !isOwner) onTabChange("dashboard");
+  }, [activeTab, hasPermission, isOwner, onTabChange]);
+
+  // Mark notifications as read when the admin panel is opened
+  useEffect(() => {
+    if (user && (isAdmin || isStaff || isOwner) && (summary?.unreadNotifications ?? 0) > 0) {
+      adminApi("mark-notifications-read").catch(() => {});
+    }
+  }, [user, isAdmin, isStaff, isOwner, summary?.unreadNotifications]);
 
   if (loading || !user || (!isAdmin && !isStaff && !isOwner)) return null;
 
@@ -97,24 +114,30 @@ export function AdminLayout({ activeTab, onTabChange, children }: Props) {
             <div>
               <h1 className="text-2xl font-bold">Painel {isOwner ? "do Dono" : "de Controle"}</h1>
               <p className="text-xs text-muted-foreground">
-                {isOwner ? "👑 Acesso total ao sistema" : `🛠️ ${staff?.role}`}
+                {isOwner ? "Acesso total ao sistema" : roleLabel}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             {/* Notifications */}
-            <div className="relative">
+            <button
+              className="relative"
+              onClick={() => {
+                adminApi("mark-notifications-read").catch(() => {});
+                qc.invalidateQueries({ queryKey: ["admin-layout-summary"] });
+              }}
+            >
               <Bell className="h-5 w-5 text-muted-foreground" />
-              {(notifCount ?? 0) > 0 && (
+              {(summary?.unreadNotifications ?? 0) > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 grid h-4 w-4 place-items-center rounded-full bg-destructive text-[9px] font-bold text-destructive-foreground">
-                  {notifCount}
+                  {summary?.unreadNotifications}
                 </span>
               )}
-            </div>
+            </button>
             {/* Open tickets badge */}
             <Badge variant="outline" className="gap-1">
               <Ticket className="h-3 w-3" />
-              {openTickets ?? 0} abertos
+              {summary?.openTickets ?? 0} abertos
             </Badge>
             <Button variant="ghost" size="sm" onClick={signOut}>
               <LogOut className="h-4 w-4" />
@@ -143,8 +166,8 @@ export function AdminLayout({ activeTab, onTabChange, children }: Props) {
             {NAV_ITEMS.map((item) => {
               // Se requer permissão e usuário não tem, esconde
               if (item.permission && !isOwner && !hasPermission(item.permission)) return null;
-              // shop e settings só owner
-              if ((item.id === "shop" || item.id === "settings") && !isOwner) return null;
+              // settings só owner
+              if (item.id === "settings" && !isOwner) return null;
 
               return (
                 <button
@@ -161,9 +184,9 @@ export function AdminLayout({ activeTab, onTabChange, children }: Props) {
                 >
                   <item.icon className="h-4 w-4" />
                   {item.label}
-                  {item.id === "tickets" && (openTickets ?? 0) > 0 && (
+                  {item.id === "tickets" && (summary?.openTickets ?? 0) > 0 && (
                     <span className="ml-auto text-xs bg-destructive/20 text-destructive px-1.5 py-0.5 rounded-full">
-                      {openTickets}
+                      {summary?.openTickets}
                     </span>
                   )}
                 </button>

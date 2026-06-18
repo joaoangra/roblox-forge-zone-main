@@ -3,39 +3,36 @@ const { Client } = require("pg");
 const fs = require("fs");
 const path = require("path");
 
-// Decode URL-encoded password: %40 = @, %2B = +
-const DATABASE_URL =
-  "postgresql://postgres:Joao%4030062008%2B@db.kskxlrmwpudqhpbfxvuv.supabase.co:5432/postgres";
-const decodedUrl = DATABASE_URL.replace(/%40/g, "@").replace(/%2B/g, "+");
+const migrations = [
+  "20260616050300_community_tables.sql",
+  "20260616050200_fix_support_views.sql",
+];
+
+function getDatabaseUrl() {
+  if (!process.env.DATABASE_URL) {
+    throw new Error("Missing DATABASE_URL. Set it in your shell or .env runner before applying migrations.");
+  }
+  return process.env.DATABASE_URL;
+}
 
 async function main() {
-  const client = new Client({ connectionString: decodedUrl });
+  const client = new Client({ connectionString: getDatabaseUrl() });
   await client.connect();
-  console.log("✅ Conectado ao banco\n");
+  console.log("Connected to database");
 
-  // Apply community tables migration
-  const communitySql = fs.readFileSync(
-    path.join(__dirname, "..", "supabase/migrations/20260616050300_community_tables.sql"),
-    "utf8"
-  );
-  console.log("📦 Aplicando: community_tables...");
-  await client.query(communitySql);
-  console.log("✅ community_tables aplicado\n");
-
-  // Apply support views migration
-  const supportSql = fs.readFileSync(
-    path.join(__dirname, "..", "supabase/migrations/20260616050200_fix_support_views.sql"),
-    "utf8"
-  );
-  console.log("📦 Aplicando: fix_support_views...");
-  await client.query(supportSql);
-  console.log("✅ fix_support_views aplicado\n");
+  for (const file of migrations) {
+    const filePath = path.join(__dirname, "..", "supabase", "migrations", file);
+    const sql = fs.readFileSync(filePath, "utf8");
+    console.log(`Applying ${file}...`);
+    await client.query(sql);
+    console.log(`Applied ${file}`);
+  }
 
   await client.end();
-  console.log("🎉 Todas as migrações aplicadas com sucesso!");
+  console.log("Migrations applied successfully");
 }
 
 main().catch((err) => {
-  console.error("❌ Erro:", err.message);
+  console.error("Migration failed:", err.message);
   process.exit(1);
 });

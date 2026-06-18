@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { BadgeCheck, Clock, FileWarning, Package, Plus, ShieldAlert } from "lucide-react";
+import { BadgeCheck, Clock, Crown, FileWarning, Image, Package, Plus, ShieldAlert, Infinity, Gamepad2, Share2 } from "lucide-react";
 import { slugify, brl, calcOrderSplit } from "@/lib/marketplace";
 
 export const Route = createFileRoute("/sell")({
@@ -65,7 +65,7 @@ function SellPage() {
 }
 
 function SellerProfileTab() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const qc = useQueryClient();
   const [connecting, setConnecting] = useState(false);
   const { data: sp } = useQuery({
@@ -307,6 +307,32 @@ function SellerProfileTab() {
           )}
         </CardContent>
       </Card>
+
+      {/* Premium status */}
+      <Card className="bg-gradient-to-br from-yellow-500/5 to-orange-500/5 border-yellow-500/20">
+        <CardContent className="p-6">
+          <div className="flex items-center gap-3">
+            <Crown className={`h-8 w-8 ${profile?.is_premium ? "text-yellow-500" : "text-muted-foreground"}`} />
+            <div className="flex-1">
+              <h3 className="font-semibold">{profile?.is_premium ? "Plano Premium ativo" : "Plano Premium"}</h3>
+              <p className="text-xs text-muted-foreground">
+                {profile?.is_premium
+                  ? profile.premium_until
+                    ? `Válido até ${new Date(profile.premium_until).toLocaleDateString("pt-BR")}`
+                    : "Acesso vitalício!"
+                  : "Taxa zero de comissão, anúncios em destaque e suporte prioritário."}
+              </p>
+            </div>
+            {!profile?.is_premium && (
+              <Button size="sm" asChild>
+                <Link to="/premium">
+                  <Crown className="h-3 w-3" /> Assinar
+                </Link>
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -377,16 +403,26 @@ function NewListingTab() {
     short: "",
     description: "",
     price: "",
-    game: "",
+    gameId: "",
     category: "",
     delivery: "manual" as const,
+    stock: "",
+    unlimitedStock: false,
   });
   const [cover, setCover] = useState<File | null>(null);
+  const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
+  const [newGameName, setNewGameName] = useState("");
+  const [addingGame, setAddingGame] = useState(false);
   const [saving, setSaving] = useState(false);
   const { data: cats } = useQuery({
     queryKey: ["mp-cats"],
     queryFn: async () =>
       (await supabase.from("marketplace_categories").select("*").order("sort_order")).data ?? [],
+  });
+  const { data: games, refetch: refetchGames } = useQuery({
+    queryKey: ["roblox-games"],
+    queryFn: async () =>
+      (await supabase.from("roblox_games").select("id, name, slug").order("name")).data ?? [],
   });
   const { data: sp } = useQuery({
     queryKey: ["my-seller", user!.id],
@@ -397,6 +433,22 @@ function NewListingTab() {
 
   const priceCents = Math.round((parseFloat(form.price.replace(",", ".")) || 0) * 100);
   const split = priceCents > 0 ? calcOrderSplit(priceCents) : null;
+
+  async function addNewGame() {
+    const name = newGameName.trim();
+    if (!name) return;
+    setAddingGame(true);
+    const { error } = await supabase.from("roblox_games").insert({
+      name,
+      slug: slugify(name),
+      created_by: user!.id,
+    });
+    setAddingGame(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Jogo adicionado!");
+    setNewGameName("");
+    refetchGames();
+  }
 
   async function publish() {
     if (!sp?.verified) {
@@ -421,25 +473,38 @@ function NewListingTab() {
       coverUrl = supabase.storage.from("listing-media").getPublicUrl(data.path).data.publicUrl;
     }
     const slug = slugify(form.title);
-    const { error } = await supabase.from("listings").insert({
+    const { data: listing, error } = await supabase.from("listings").insert({
       seller_id: user!.id,
       category_id: form.category,
       slug,
       title: form.title,
       short_description: form.short,
       description: form.description,
-      game_name: form.game || null,
+      roblox_game_id: form.gameId || null,
       price_cents: priceCents,
       delivery_type: form.delivery,
       cover_image_url: coverUrl,
+      stock: form.unlimitedStock ? null : (parseInt(form.stock) || 1),
+      unlimited_stock: form.unlimitedStock,
       status: "pending_review",
-    });
-    setSaving(false);
-    if (error) toast.error(error.message);
-    else {
-      toast.success("Anúncio criado! Aguarde aprovação do admin.");
-      router.navigate({ to: "/sell" });
+    }).select("id").single();
+    if (error || !listing) {
+      setSaving(false);
+      toast.error(error?.message ?? "Erro ao criar");
+      return;
     }
+    // Upload gallery images
+    for (const file of galleryFiles) {
+      const path = `${user!.id}/${Date.now()}-${file.name}`;
+      const { data: up } = await supabase.storage.from("listing-media").upload(path, file);
+      if (up) {
+        const url = supabase.storage.from("listing-media").getPublicUrl(up.path).data.publicUrl;
+        await supabase.from("listing_images").insert({ listing_id: listing.id, url });
+      }
+    }
+    setSaving(false);
+    toast.success("Anúncio criado! Aguarde aprovação do admin.");
+    router.navigate({ to: "/sell" });
   }
 
   return (
@@ -475,8 +540,34 @@ function NewListingTab() {
             </Select>
           </div>
           <div>
-            <Label>Jogo (ex: Blox Fruits)</Label>
-            <Input value={form.game} onChange={(e) => setForm({ ...form, game: e.target.value })} />
+            <Label>Jogo</Label>
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <Select value={form.gameId} onValueChange={(v) => setForm({ ...form, gameId: v })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um jogo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {games?.map((g: any) => (
+                      <SelectItem key={g.id} value={g.id}>
+                        <Gamepad2 className="h-3 w-3 inline mr-1" />{g.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-2">
+              <Input
+                placeholder="Adicionar novo jogo..."
+                value={newGameName}
+                onChange={(e) => setNewGameName(e.target.value)}
+                className="text-xs"
+              />
+              <Button variant="outline" size="sm" onClick={addNewGame} disabled={addingGame || !newGameName.trim()}>
+                <Plus className="h-3 w-3" />
+              </Button>
+            </div>
           </div>
         </div>
         <div>
@@ -518,6 +609,30 @@ function NewListingTab() {
             </Select>
           </div>
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>Estoque</Label>
+            <Input
+              type="number"
+              min="1"
+              value={form.stock}
+              onChange={(e) => setForm({ ...form, stock: e.target.value })}
+              disabled={form.unlimitedStock}
+              placeholder="1"
+            />
+          </div>
+          <div className="flex items-end pb-2">
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.unlimitedStock}
+                onChange={(e) => setForm({ ...form, unlimitedStock: e.target.checked })}
+                className="h-4 w-4"
+              />
+              <Infinity className="h-4 w-4 text-muted-foreground" /> Estoque ilimitado
+            </label>
+          </div>
+        </div>
         <div>
           <Label>Imagem de capa</Label>
           <Input
@@ -526,8 +641,23 @@ function NewListingTab() {
             onChange={(e) => setCover(e.target.files?.[0] ?? null)}
           />
         </div>
+        <div>
+          <Label>Galeria de imagens (adicione várias fotos do produto)</Label>
+          <Input
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={(e) => setGalleryFiles(Array.from(e.target.files ?? []))}
+          />
+          {galleryFiles.length > 0 && (
+            <div className="text-xs text-muted-foreground mt-1">
+              {galleryFiles.length} arquivo(s) selecionado(s)
+            </div>
+          )}
+        </div>
 
         {split && (
+          <>
           <div className="text-xs bg-white/5 rounded p-3 space-y-1">
             <div className="flex justify-between">
               <span>Preço cobrado do cliente</span>
@@ -546,6 +676,13 @@ function NewListingTab() {
               <span>{brl(split.seller)}</span>
             </div>
           </div>
+          <Link to="/premium" className="block">
+            <div className="flex items-center gap-2 text-xs bg-gradient-to-r from-yellow-500/10 to-orange-500/5 border border-yellow-500/20 rounded p-2 hover:border-yellow-500/40 transition-colors">
+              <Crown className="h-4 w-4 text-yellow-500 shrink-0" />
+              <span className="text-muted-foreground">Assinantes Premium pagam <strong className="text-yellow-500">0% de comissão</strong> e têm anúncios em destaque.</span>
+            </div>
+          </Link>
+          </>
         )}
 
         <Button
@@ -562,7 +699,7 @@ function NewListingTab() {
 
 function MySalesTab() {
   const { user } = useAuth();
-  const { data } = useQuery({
+  const { data: orders } = useQuery({
     queryKey: ["my-sales", user!.id],
     queryFn: async () =>
       (
@@ -573,36 +710,127 @@ function MySalesTab() {
           .order("created_at", { ascending: false })
       ).data ?? [],
   });
-  if (!data?.length)
-    return (
-      <Card>
-        <CardContent className="p-8 text-center text-muted-foreground">
-          Sem vendas ainda.
-        </CardContent>
-      </Card>
-    );
+  const { data: listings } = useQuery({
+    queryKey: ["my-listings-stats", user!.id],
+    queryFn: async () =>
+      (
+        await supabase
+          .from("listings")
+          .select("id, title, slug, views, sales_count, total_revenue, rating")
+          .eq("seller_id", user!.id)
+          .order("created_at", { ascending: false })
+      ).data ?? [],
+  });
+
+  const totalRevenue = orders?.reduce((s: number, o: any) => s + (o.amount_cents || 0), 0) ?? 0;
+  const completedOrders = orders?.filter((o: any) => o.status === "completed") ?? [];
+  const totalFees = orders?.reduce((s: number, o: any) => s + (o.platform_fee_cents || 0) + (o.gateway_fee_cents || 0), 0) ?? 0;
+
+  async function copyListingLink(slug: string) {
+    await navigator.clipboard.writeText(`${window.location.origin}/market/${slug}`);
+    toast.success("Link copiado!");
+  }
+
   return (
-    <div className="space-y-2">
-      {data.map((o: any) => (
-        <Link key={o.id} to="/market/orders/$id" params={{ id: o.id }}>
-          <Card className="hover:border-primary/30">
-            <CardContent className="p-4 flex items-center justify-between gap-3">
-              <div>
-                <div className="font-semibold">{o.listing?.title}</div>
-                <div className="text-xs text-muted-foreground">
-                  {new Date(o.created_at).toLocaleString("pt-BR")}
+    <div className="space-y-4">
+      {/* Metrics cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Card className="bg-gradient-to-br from-primary/5 to-accent/5 border-primary/20">
+          <CardContent className="p-4 text-center">
+            <div className="text-2xl font-bold text-gradient-brand">{brl(totalRevenue)}</div>
+            <div className="text-xs text-muted-foreground">Receita total (bruta)</div>
+          </CardContent>
+        </Card>
+        <Card className="border-white/10">
+          <CardContent className="p-4 text-center">
+            <div className="text-2xl font-bold">{orders?.length ?? 0}</div>
+            <div className="text-xs text-muted-foreground">Pedidos</div>
+          </CardContent>
+        </Card>
+        <Card className="border-white/10">
+          <CardContent className="p-4 text-center">
+            <div className="text-2xl font-bold">{listings?.length ?? 0}</div>
+            <div className="text-xs text-muted-foreground">Anúncios ativos</div>
+          </CardContent>
+        </Card>
+        <Card className="border-white/10">
+          <CardContent className="p-4 text-center">
+            <div className="text-2xl font-bold">{brl(totalRevenue - totalFees)}</div>
+            <div className="text-xs text-muted-foreground">Líquido estimado</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Listing performance */}
+      {listings && listings.length > 0 && (
+        <Card>
+          <CardContent className="p-4">
+            <h3 className="text-sm font-semibold mb-3 flex items-center gap-1">
+              <Package className="h-4 w-4" /> Desempenho dos anúncios
+            </h3>
+            <div className="space-y-2">
+              {listings.map((l: any) => (
+                <div key={l.id} className="flex items-center justify-between text-sm border-b border-white/5 pb-2 last:border-0">
+                  <div className="flex-1 min-w-0">
+                    <Link to="/market/$slug" params={{ slug: l.slug }} className="font-medium truncate block hover:text-primary">
+                      {l.title}
+                    </Link>
+                    <div className="text-xs text-muted-foreground">
+                      {l.views ?? 0} visualizações · {l.sales_count ?? 0} vendas · {Number(l.rating ?? 0).toFixed(1)}★
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 ml-2">
+                    {l.total_revenue ? <span className="font-semibold text-xs">{brl(l.total_revenue)}</span> : null}
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copyListingLink(l.slug)} title="Copiar link">
+                      <Share2 className="h-3 w-3" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
-              <div className="text-right">
-                <div className="font-bold">{brl(o.amount_cents)}</div>
-                <Badge variant="outline" className="text-xs capitalize">
-                  {o.status}
-                </Badge>
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
-      ))}
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Orders */}
+      {orders && orders.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold mb-2">Histórico de pedidos</h3>
+          <div className="space-y-2">
+            {orders.map((o: any) => (
+              <Link key={o.id} to="/market/orders/$id" params={{ id: o.id }}>
+                <Card className="hover:border-primary/30">
+                  <CardContent className="p-4 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-semibold">{o.listing?.title}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(o.created_at).toLocaleString("pt-BR")}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold">{brl(o.amount_cents)}</div>
+                      <Badge variant="outline" className="text-xs capitalize">
+                        {o.status}
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(!orders || orders.length === 0) && (
+        <Card>
+          <CardContent className="p-8 text-center text-muted-foreground">
+            <Package className="h-10 w-10 mx-auto mb-2" />
+            Sem vendas ainda. Compartilhe seus anúncios para aumentar o alcance!
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
+
+
