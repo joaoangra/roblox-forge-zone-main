@@ -28,7 +28,7 @@ export const Route = createFileRoute("/scripts/")({
 function ScriptsPage() {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<string | null>(null);
-  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [sort, setSort] = useState<"newest" | "views" | "likes">("newest");
   const [tab, setTab] = useState<"catalog" | "upload">("catalog");
   const { user } = useAuth();
@@ -45,14 +45,14 @@ function ScriptsPage() {
       let qb = (supabase as any)
         .from("scripts")
         .select(
-          "id, slug, title, description, game_name, game_link, thumbnail_url, is_premium, is_verified, is_featured, quality_score, points_rewarded, likes_count, views, copies, tags, category_id, user_id",
+          "id, slug, title, description, game_name, game_link, thumbnail_url, is_premium, is_verified, is_featured, quality_score, points_rewarded, likes_count, views, copies, tags, category_id, user_id, has_key",
         )
         .eq("status", "approved");
       if (sort === "views") qb = qb.order("views", { ascending: false });
       else if (sort === "likes") qb = qb.order("likes_count", { ascending: false });
       else qb = qb.order("created_at", { ascending: false });
       if (cat) qb = qb.eq("category_id", cat);
-      if (tagFilter) qb = qb.contains("tags", [tagFilter]);
+      if (tagFilter.length > 0) qb = qb.filter('tags', 'ov', `{${tagFilter.join(',')}}`);
       if (q) qb = qb.or(`title.ilike.%${q}%,description.ilike.%${q}%,game_name.ilike.%${q}%`);
       const raw = ((await qb).data ?? []) as any[];
       const userIds = [...new Set(raw.map((r: any) => r.user_id).filter(Boolean))];
@@ -172,20 +172,20 @@ function ScriptsPage() {
         <div className="flex flex-wrap gap-2 mb-6">
           <span className="text-xs text-muted-foreground self-center mr-1">Tags:</span>
           <button
-            className={`px-3 py-1 rounded-full text-xs font-medium border transition-all duration-200 ${tagFilter === null ? "bg-primary/20 border-primary text-primary" : "bg-white/5 border-white/10 text-muted-foreground hover:border-white/20"}`}
-            onClick={() => setTagFilter(null)}
+            className={`px-3 py-1 rounded-full text-xs font-medium border transition-all duration-200 ${tagFilter.length === 0 ? "bg-primary/20 border-primary text-primary" : "bg-white/5 border-white/10 text-muted-foreground hover:border-white/20"}`}
+            onClick={() => setTagFilter([])}
           >Todas</button>
           {["Sem Key", "Seguro", "Indetectável", "Funciona bem", "Atualizado"].map((tag) => (
             <button
               key={tag}
               className={`px-3 py-1 rounded-full text-xs font-medium border transition-all duration-200 ${
-                tagFilter === tag
+                tagFilter.includes(tag)
                   ? "bg-primary/20 border-primary text-primary"
                   : "bg-white/5 border-white/10 text-muted-foreground hover:border-white/20"
               }`}
-              onClick={() => setTagFilter(tag === tagFilter ? null : tag)}
+              onClick={() => setTagFilter(tagFilter.includes(tag) ? tagFilter.filter(t => t !== tag) : [...tagFilter, tag])}
             >
-              {tag}
+              {tagFilter.includes(tag) ? "✓ " : ""}{tag}
             </button>
           ))}
         </div>
@@ -237,6 +237,16 @@ function ScriptsPage() {
                     {s.quality_score >= 80 && !s.is_premium && !s.is_featured && !s.is_verified && (
                       <span className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-full bg-gradient-to-br from-purple-500/20 to-pink-500/20 px-2 py-1 text-[10px] font-bold text-purple-300 border border-purple-500/30">
                         💎 Elite
+                      </span>
+                    )}
+                    {s.has_key === false && (
+                      <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-full bg-success/90 text-success-foreground px-2 py-1 text-[10px] font-bold shadow-lg z-20">
+                        🔓 Sem Key
+                      </span>
+                    )}
+                    {s.has_key === true && (
+                      <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-full bg-amber-600/90 text-white px-2 py-1 text-[10px] font-bold shadow-lg z-20">
+                        🔒 Com Key
                       </span>
                     )}
                   </div>
@@ -378,7 +388,7 @@ function ScriptUploadForm({ user, onDone }: { user: any; onDone: () => void }) {
         game_name: gameName.trim(),
         game_link: gameLink.trim(),
         thumbnail_url: thumbnailUrl || null,
-        has_key: tags.includes("Sem Key"),
+        has_key: !tags.includes("Sem Key"),
         is_obfuscated: false,
         tags,
         category_id: categoryId,

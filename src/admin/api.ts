@@ -1336,6 +1336,10 @@ async function updateScript(actorId: string, body: AdminBody) {
   if (body.is_featured !== undefined) updates.is_featured = Boolean(body.is_featured);
   if (body.is_verified !== undefined) updates.is_verified = Boolean(body.is_verified);
   if (body.tags !== undefined) updates.tags = Array.isArray(body.tags) ? body.tags.map(String) : [];
+  if (body.has_key !== undefined) updates.has_key = Boolean(body.has_key);
+  if (body.is_obfuscated !== undefined) updates.is_obfuscated = Boolean(body.is_obfuscated);
+  if (body.supported_executors !== undefined) updates.supported_executors = Array.isArray(body.supported_executors) ? body.supported_executors.map(String) : [];
+  if (body.category_id !== undefined) updates.category_id = String(body.category_id);
 
   const { error } = await (sba as any).from("scripts").update(updates).eq("id", id);
   if (error) throw error;

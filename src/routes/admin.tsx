@@ -1499,6 +1499,7 @@ function ScriptManageCard({ script, qc }: { script: any; qc: ReturnType<typeof u
   const [isFeatured, setIsFeatured] = useState(script.is_featured ?? false);
   const [isVerified, setIsVerified] = useState(script.is_verified ?? false);
   const [tags, setTags] = useState<string[]>(script.tags ?? []);
+  const [hasKey, setHasKey] = useState(script.has_key ?? false);
   const [saving, setSaving] = useState(false);
 
   function toggleTag(tag: string) {
@@ -1512,11 +1513,13 @@ function ScriptManageCard({ script, qc }: { script: any; qc: ReturnType<typeof u
         id: script.id, title, description, code,
         game_name: gameName, game_link: gameLink,
         thumbnail_url: thumbnailUrl, quality_score: qualityScore,
-        is_premium: isPremium, is_featured: isFeatured, is_verified: isVerified, tags,
+        is_premium: isPremium, is_featured: isFeatured, is_verified: isVerified,
+        tags, has_key: hasKey,
       });
       toast.success("Script atualizado!");
       setEditing(false);
       qc.invalidateQueries({ queryKey: ["admin-scripts-pending"] });
+      qc.invalidateQueries({ queryKey: ["script", script.slug] });
     } catch (err: any) {
       toast.error(err.message ?? "Erro ao salvar");
     }
@@ -1620,6 +1623,10 @@ function ScriptManageCard({ script, qc }: { script: any; qc: ReturnType<typeof u
                 ))}
               </div>
             </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={hasKey} onChange={(e) => setHasKey(e.target.checked)} className="accent-primary" />
+              {hasKey ? "🔒 Com Key" : "🔓 Sem Key"}
+            </label>
             <div className="flex gap-2">
               <Button onClick={handleSave} disabled={saving} size="sm">
                 {saving ? "Salvando..." : "Salvar"}
@@ -1814,7 +1821,13 @@ function EditScriptDialog({ script, qc }: { script: any; qc: ReturnType<typeof u
   const [isPremium, setIsPremium] = useState(script.is_premium ?? false);
   const [isFeatured, setIsFeatured] = useState(script.is_featured ?? false);
   const [isVerified, setIsVerified] = useState(script.is_verified ?? false);
+  const [tags, setTags] = useState<string[]>(script.tags ?? []);
+  const [hasKey, setHasKey] = useState(script.has_key ?? false);
   const [saving, setSaving] = useState(false);
+
+  function toggleTag(tag: string) {
+    setTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]);
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -1824,9 +1837,11 @@ function EditScriptDialog({ script, qc }: { script: any; qc: ReturnType<typeof u
         game_name: gameName, game_link: gameLink,
         thumbnail_url: thumbnailUrl, quality_score: qualityScore,
         is_premium: isPremium, is_featured: isFeatured, is_verified: isVerified,
+        tags, has_key: hasKey,
       });
       toast.success("Script atualizado!");
       qc.invalidateQueries({ queryKey: ["admin-scripts-pending"] });
+      qc.invalidateQueries({ queryKey: ["script", script.slug] });
       const el = document.getElementById(`edit-script-${script.id}`);
       if (el) (el as HTMLDialogElement).close();
     } catch (err: any) {
@@ -1883,6 +1898,29 @@ function EditScriptDialog({ script, qc }: { script: any; qc: ReturnType<typeof u
             Verificado
           </label>
         </div>
+        <div>
+          <Label className="text-xs">Tags</Label>
+          <div className="flex flex-wrap gap-2 mt-1">
+            {["Sem Key", "Seguro", "Indetectável", "Funciona bem", "Atualizado"].map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => toggleTag(tag)}
+                className={`px-2 py-1 rounded-full text-[10px] font-medium border transition-all duration-200 ${
+                  tags.includes(tag)
+                    ? "bg-primary/20 border-primary text-primary border-primary/40"
+                    : "bg-white/5 border-white/10 text-muted-foreground hover:border-white/20"
+                }`}
+              >
+                {tags.includes(tag) ? "✓ " : ""}{tag}
+              </button>
+            ))}
+          </div>
+        </div>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={hasKey} onChange={(e) => setHasKey(e.target.checked)} className="accent-primary" />
+          {hasKey ? "🔒 Com Key" : "🔓 Sem Key"}
+        </label>
         <div className="flex gap-2 pt-2">
           <Button onClick={handleSave} disabled={saving} className="gap-1.5">
             {saving ? "Salvando..." : "Salvar alterações"}
