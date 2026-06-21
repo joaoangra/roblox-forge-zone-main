@@ -41,20 +41,34 @@ function ListingPage() {
   const router = useRouter();
   const qc = useQueryClient();
   const [question, setQuestion] = useState("");
-  const [buying, setBuying] = useState(false);
+  const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
+  const [quantity, setQuantity] = useState(1);
 
   const { data: listing, isLoading } = useQuery({
     queryKey: ["listing", slug],
     queryFn: async () =>
       (
-        await supabase
+        await (supabase as any)
           .from("listings")
           .select(
             "*, category:marketplace_categories(name, slug), roblox_game:roblox_games(name), images:listing_images(*), questions:listing_questions(*)",
           )
           .eq("slug", slug)
           .maybeSingle()
-      ).data,
+      ).data as any,
+  });
+
+  const { data: options } = useQuery({
+    queryKey: ["listing-options", slug],
+    queryFn: async () => {
+      const { data: optData } = await (supabase as any)
+        .from("listing_options")
+        .select("*")
+        .eq("listing_id", (listing as any)?.id ?? "")
+        .order("sort_order");
+      return (optData ?? []) as any[];
+    },
+    enabled: !!listing,
   });
 
   const { data: seller } = useQuery({
@@ -90,9 +104,18 @@ function ListingPage() {
       </PageShell>
     );
 
-  const l = listing;
+  const l = listing as any;
 
-  async function buy() {
+  const effectivePrice = (() => {
+    let base = l.price_cents;
+    if (selectedOptionId && options) {
+      const opt = options.find((o: any) => o.id === selectedOptionId);
+      if (opt) base = l.price_cents + opt.price_adjustment_cents;
+    }
+    return base * Math.max(1, quantity);
+  })();
+
+  function buy() {
     if (!user) {
       router.navigate({ to: "/auth" });
       return;
@@ -101,29 +124,14 @@ function ListingPage() {
       toast.error("Você não pode comprar o próprio anúncio");
       return;
     }
-    setBuying(true);
-    const { data: session } = await supabase.auth.getSession();
-    const token = session.session?.access_token;
-    if (!token) {
-      setBuying(false);
-      router.navigate({ to: "/auth" });
-      return;
-    }
-    const response = await fetch("/marketplace/create-checkout-session", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ listing_id: l.id, buyer_id: user.id }),
+    router.navigate({
+      to: "/checkout",
+      search: {
+        listing_id: l.id,
+        option_id: selectedOptionId || undefined,
+        quantity,
+      } as any,
     });
-    const data = (await response.json()) as { url?: string; error?: string };
-    setBuying(false);
-    if (!response.ok || !data.url) {
-      toast.error(data.error ?? "Nao foi possivel iniciar o pagamento");
-      return;
-    }
-    window.location.href = data.url;
   }
 
   async function askQuestion() {
@@ -149,12 +157,12 @@ function ListingPage() {
 
   // Track view (fire and forget)
   if (l?.id && typeof window !== "undefined") {
-    supabase.from("listing_events").insert({
+    (supabase as any).from("listing_events").insert({
       listing_id: l.id,
       actor_id: user?.id ?? null,
       event_type: "view",
     }).then(() => {
-      supabase.rpc("increment_listing_views", { row_id: l.id }).catch(() => {});
+      (supabase as any).rpc("increment_listing_views", { row_id: l.id }).catch(() => {});
     }).catch(() => {});
   }
 
@@ -163,7 +171,7 @@ function ListingPage() {
     queryKey: ["related-listings", l.category_id, l.id],
     enabled: !!l.category_id,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from("listings")
         .select("id, title, slug, price_cents, cover_image_url, rating, total_reviews")
         .eq("status", "active")
@@ -198,7 +206,7 @@ function ListingPage() {
         window.open(`https://twitter.com/intent/tweet?text=${encoded}`, "_blank");
         break;
     }
-    supabase.from("listing_events").insert({
+    (supabase as any).from("listing_events").insert({
       listing_id: l.id, actor_id: user?.id ?? null, event_type: "share", channel,
     }).catch(() => {});
   }
@@ -379,20 +387,70 @@ function ListingPage() {
             <Card className="sticky top-20">
               <CardContent className="p-6 space-y-4">
                 <div>
-                  <div className="text-3xl font-bold text-gradient-brand">{brl(l.price_cents)}</div>
+                  <div className="text-3xl font-bold text-gradient-brand">{brl(effectivePrice)}</div>
                   {l.original_price_cents && l.original_price_cents > l.price_cents && (
                     <div className="text-sm text-muted-foreground line-through">
                       {brl(l.original_price_cents)}
                     </div>
                   )}
                 </div>
+
+                {options && options.length > 0 && (
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Opções</label>
+                    <div className="space-y-1">
+                      {options.map((opt: any) => (
+                        <button
+                          key={opt.id}
+                          onClick={() => setSelectedOptionId(opt.id)}
+                          className={`w-full text-left px-3 py-2 rounded-lg text-sm border transition-colors ${
+                            selectedOptionId === opt.id
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-white/10 hover:border-white/30"
+                          }`}
+                        >
+                          <div className="font-medium">{opt.label}</div>
+                          {opt.description && (
+                            <div className="text-xs text-muted-foreground">{opt.description}</div>
+                          )}
+                          {opt.price_adjustment_cents !== 0 && (
+                            <div className="text-xs text-muted-foreground">
+                              {opt.price_adjustment_cents > 0 ? "+" : ""}
+                              {brl(opt.price_adjustment_cents)}
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {!l.unlimited_stock && l.stock > 1 && (
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Quantidade</label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                        className="h-8 w-8 rounded border border-white/10 hover:bg-white/5"
+                      >
+                        -
+                      </button>
+                      <span className="w-8 text-center font-semibold">{quantity}</span>
+                      <button
+                        onClick={() => setQuantity(Math.min(l.stock ?? 99, quantity + 1))}
+                        className="h-8 w-8 rounded border border-white/10 hover:bg-white/5"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <Button
                   onClick={buy}
-                  disabled={buying}
                   className="w-full bg-gradient-to-r from-primary to-accent text-white border-0"
                 >
-                  <ShoppingCart className="h-4 w-4" />{" "}
-                  {buying ? "Abrindo Stripe..." : "Comprar com pagamento seguro"}
+                  <ShoppingCart className="h-4 w-4" /> Comprar com pagamento seguro
                 </Button>
                 <div className="flex items-start gap-2 text-xs text-muted-foreground bg-primary/5 border border-primary/20 rounded-lg p-3">
                   <Shield className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />

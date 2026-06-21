@@ -50,7 +50,7 @@ export const PERMISSIONS = [
   "announcements.delete",
   "content.edit",
   "shop.products.manage",
-  "shop.smiley.manage",
+  "shop.bux.manage",
   "shop.products.read_all",
   "listings.approve",
   "listings.reject",
@@ -106,7 +106,7 @@ export function defaultPermissions(role: string): string[] {
     case "staff":
       return ["dashboard.read", "tickets.read", "tickets.respond", "tickets.resolve", "logs.read"];
     case "official_seller":
-      return ["shop.products.manage", "shop.smiley.manage"];
+      return ["shop.products.manage", "shop.bux.manage"];
     case "seller":
       return ["shop.products.manage"];
     default:

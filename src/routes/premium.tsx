@@ -6,16 +6,16 @@ import { useAuth } from "@/lib/auth";
 import { PageShell } from "@/components/site/PageShell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Check, Crown, Sparkles, ShieldCheck, Clock, ArrowRight } from "lucide-react";
+import { Check, Crown, Sparkles, ShieldCheck, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/premium")({
   head: () => ({
     meta: [
-      { title: "Planos Premium – RBXScripts" },
+      { title: "Planos Premium – BuxHub" },
       {
         name: "description",
-        content: "Tenha acesso vitalício a todos os scripts premium via PIX.",
+        content: "Upgrade para Premium e desbloqueie ferramentas exclusivas, vantagens especiais e acesso total ao ecossistema BuxHub.",
       },
     ],
   }),
@@ -61,10 +61,8 @@ function PremiumPage() {
     },
   });
 
-  function lookupKeyForPlan(plan: { duration_days?: number; name?: string }) {
-    const text = `${plan.name ?? ""} ${plan.duration_days ?? ""}`.toLowerCase();
-    if (plan.duration_days === 90 || text.includes("90")) return "buxhub_premium_90d";
-    if (plan.duration_days === 60 || text.includes("60")) return "buxhub_premium_60d";
+  function lookupKeyForPlan(plan: { duration_days?: number }) {
+    if (plan.duration_days === 60) return "buxhub_premium_60d";
     return "buxhub_premium_30d";
   }
 
@@ -136,17 +134,15 @@ function PremiumPage() {
         <div className="text-center mb-12">
           <div className="inline-flex items-center gap-2 rounded-full glass px-3 py-1 text-xs mb-4">
             <Sparkles className="h-3 w-3 text-primary" />
-            Premium RBXScripts • PIX seguro
+            BuxHub Premium • Ativação automática via Stripe
           </div>
 
           <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight">
-            Vire <span className="text-gradient-brand">Premium</span> e desbloqueie
-            <span className="block text-gradient-brand">scripts pra qualquer Roblox</span>
+            BuxHub <span className="text-gradient-brand">Premium</span>
           </h1>
 
           <p className="text-muted-foreground mt-3 max-w-2xl mx-auto">
-            Acesso vitalício aos scripts premium + benefícios na Smiiley Store: <b>6% OFF</b> e
-            <b> 1.5x pontos</b> em compras e vendas.
+            Acesse recursos exclusivos, benefícios premium e desbloqueie a experiência completa da plataforma.
           </p>
 
           {isPremium && (
@@ -202,7 +198,7 @@ function PremiumPage() {
                           R$ {Number(p.price_brl).toFixed(2)}
                         </div>
                         <div className="mt-1 text-xs uppercase tracking-wider text-muted-foreground">
-                          Pagamento via PIX • Liberação aprox. 24h
+                          Pagamento via Stripe • Ativação automática
                         </div>
                       </div>
 
@@ -214,8 +210,8 @@ function PremiumPage() {
                           {(features.length
                             ? features
                             : [
-                                "Acesso vitalício aos scripts premium",
-                                "Benefícios na Smiiley Store",
+                                "Acesso premium aos scripts",
+                                "Benefícios na Bux Store",
                                 "Suporte prioritário",
                               ]
                           ).map((f) => (
@@ -232,17 +228,9 @@ function PremiumPage() {
                         className="w-full mt-6 bg-gradient-to-r from-primary to-accent text-white border-0"
                       >
                         <Crown className="h-4 w-4" />
-                        Assinar com Stripe
+                        Assinar agora
                         <ArrowRight className="h-4 w-4 ml-1" />
                       </Button>
-
-                      <div className="mt-3 flex items-start gap-2 text-xs text-muted-foreground">
-                        <Clock className="h-4 w-4 text-primary shrink-0" />
-                        <span>
-                          Após enviar o comprovante no chat, a liberação do Premium acontece em até
-                          24h.
-                        </span>
-                      </div>
                     </CardContent>
                   </Card>
                 );
@@ -254,22 +242,22 @@ function PremiumPage() {
         {/* INFO BOX */}
         <Card className="mt-12 border-white/10 bg-card/50">
           <CardContent className="p-6">
-            <h3 className="font-semibold mb-2">Por que Premium vale a pena (Roblox)</h3>
+            <h3 className="font-semibold mb-2">Vantagens do Premium</h3>
 
             <div className="mt-4 grid md:grid-cols-2 gap-6">
               <div>
                 <div className="flex items-center gap-2 mb-3 text-sm font-semibold">
                   <ShieldCheck className="h-4 w-4 text-primary" />
-                  Desbloqueio instantâneo
+                  Acesso completo
                 </div>
                 <ul className="space-y-2 text-sm text-muted-foreground">
                   <li className="flex items-start gap-2">
                     <Check className="h-4 w-4 text-success shrink-0 mt-0.5" />
-                    Acesso vitalício a todos os scripts premium do catálogo.
+                    Catálogo completo de scripts premium sem restrições.
                   </li>
                   <li className="flex items-start gap-2">
                     <Check className="h-4 w-4 text-success shrink-0 mt-0.5" />
-                    Suporte prioritário pra você não ficar travado na hora.
+                    Suporte prioritário com atendimento ágil.
                   </li>
                 </ul>
               </div>
@@ -277,29 +265,29 @@ function PremiumPage() {
               <div>
                 <div className="flex items-center gap-2 mb-3 text-sm font-semibold">
                   <Crown className="h-4 w-4 text-primary" />
-                  Vantagens na Smiiley Store
+                  Benefícios na Bux Store
                 </div>
                 <ul className="space-y-2 text-sm text-muted-foreground">
                   <li className="flex items-start gap-2">
                     <Check className="h-4 w-4 text-success shrink-0 mt-0.5" />
-                    <b>6% OFF</b> em produtos selecionados (pagamento com pontos/PIX conforme loja).
+                    <b>6% OFF</b> em produtos selecionados.
                   </li>
                   <li className="flex items-start gap-2">
                     <Check className="h-4 w-4 text-success shrink-0 mt-0.5" />
-                    <b>1.5x de pontos</b> em compras e vendas pra você evoluir mais rápido.
+                    <b>1.5x pontos</b> em compras e vendas.
                   </li>
                 </ul>
               </div>
             </div>
 
             <div className="mt-5">
-              <h3 className="font-semibold mb-2">Como funciona o PIX?</h3>
+              <h3 className="font-semibold mb-2">Como funciona</h3>
 
               <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1">
-                <li>Escolha um plano e clique em comprar.</li>
-                <li>A chave PIX será exibida em uma página privada com chat.</li>
-                <li>Faça o PIX no valor exato e envie o comprovante no chat.</li>
-                <li>O admin libera seu Premium em até 24h.</li>
+                <li>Escolha o plano ideal e clique em "Assinar agora".</li>
+                <li>Você será redirecionado ao Stripe Checkout para pagamento com cartão de crédito.</li>
+                <li>Após a confirmação, o Premium é ativado automaticamente.</li>
+                <li>Gerencie ou cancele sua assinatura diretamente pelo Stripe quando quiser.</li>
               </ol>
             </div>
           </CardContent>

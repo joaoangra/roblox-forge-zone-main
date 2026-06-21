@@ -51,12 +51,17 @@ export function Footer() {
           <ul className="space-y-2 text-sm text-muted-foreground">
             <li>
               <Link to="/shop" className="hover:text-foreground">
-                Loja Smiiley
+                Bux Store
               </Link>
             </li>
             <li>
               <Link to="/points" className="hover:text-foreground">
                 Sistema de Pontos
+              </Link>
+            </li>
+            <li>
+              <Link to="/bux-pass" className="hover:text-foreground">
+                Bux Pass
               </Link>
             </li>
             <li>

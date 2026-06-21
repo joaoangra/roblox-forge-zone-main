@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { getStripe, json, readJson } from "@/stripe/stripe";
+import { awardSpCapped } from "./bux-points";
 
 export async function releaseEligibleTransactions(limit = 50) {
   const { data: transactions, error } = await supabaseAdmin
@@ -71,6 +72,32 @@ export async function releaseTransaction(transactionId: string) {
       .eq("id", transaction.marketplace_order_id);
   }
 
+  // Credit seller's wallet (atomic update)
+  await (supabaseAdmin as any).rpc("credit_wallet", {
+    p_user_id: transaction.seller_id,
+    p_cents: transaction.seller_amount_cents,
+  });
+
+  // Award Bux Points (SP) for completed purchase (1 SP per R$2, cap 40/day via global cap)
+  if (transaction.marketplace_order_id) {
+    const amountCents = transaction.amount_cents ?? 0;
+    const sellerAmountCents = transaction.seller_amount_cents ?? 0;
+
+    const buyerSp = Math.floor(amountCents / 200);
+    if (buyerSp > 0) {
+      await awardSpCapped(transaction.buyer_id, buyerSp,
+        `Compra finalizada #${(transaction.marketplace_order_id as string).slice(0, 8)}`,
+        "purchase", transaction.marketplace_order_id);
+    }
+
+    const sellerSp = Math.floor(sellerAmountCents / 200);
+    if (sellerSp > 0) {
+      await awardSpCapped(transaction.seller_id, sellerSp,
+        `Venda concluída #${(transaction.marketplace_order_id as string).slice(0, 8)}`,
+        "sale", transaction.marketplace_order_id);
+    }
+  }
+
   return updated;
 }
 
@@ -80,7 +107,10 @@ export async function handleReleaseDuePayouts(request: Request) {
   }
 
   const expected = process.env.CRON_SECRET;
-  if (expected && request.headers.get("authorization") !== `Bearer ${expected}`) {
+  if (!expected) {
+    return json({ error: "CRON_SECRET not configured" }, { status: 500 });
+  }
+  if (request.headers.get("authorization") !== `Bearer ${expected}`) {
     return json({ error: "Unauthorized" }, { status: 401 });
   }
 

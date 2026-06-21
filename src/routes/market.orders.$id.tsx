@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   Clock,
   CreditCard,
+  Star,
 } from "lucide-react";
 
 export const Route = createFileRoute("/market/orders/$id")({ component: OrderPage });
@@ -67,6 +68,24 @@ function OrderPage() {
     refetchInterval: 3000,
   });
 
+  const [rating, setRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [comment, setComment] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const { data: review } = useQuery({
+    queryKey: ["mp-order-review", id],
+    enabled: !!order && order?.status === "released",
+    queryFn: async () =>
+      (
+        await supabase
+          .from("reviews")
+          .select("*")
+          .eq("order_id", id)
+          .maybeSingle()
+      ).data,
+  });
+
   const [msg, setMsg] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -101,7 +120,7 @@ function OrderPage() {
       },
       body: JSON.stringify(body),
     });
-    const data = (await response.json().catch(() => ({}))) as { error?: string };
+    const data = (await response.json().catch(() => ({}))) as any;
     if (!response.ok) {
       toast.error(data.error ?? "Nao foi possivel concluir a acao");
       return null;
@@ -134,6 +153,26 @@ function OrderPage() {
     setMsg("");
     setFile(null);
     qc.invalidateQueries({ queryKey: ["mp-messages", room?.id] });
+  }
+
+  async function submitReview() {
+    if (rating === 0) {
+      toast.error("Selecione uma avaliação");
+      return;
+    }
+    setSubmitting(true);
+    const ok = await postAction("/marketplace/submit-review", {
+      order_id: id,
+      listing_id: (order as any).listing_id,
+      seller_id: (order as any).seller_id,
+      rating,
+      comment: comment.trim() || undefined,
+    });
+    if (ok) {
+      toast.success(`Avaliação enviada! +${ok.sp_earned ?? 0} SP`);
+      qc.invalidateQueries({ queryKey: ["mp-order-review"] });
+    }
+    setSubmitting(false);
   }
 
   async function markDelivered() {
@@ -272,12 +311,22 @@ function OrderPage() {
             <Card className="border-sky-500/25 bg-sky-500/5">
               <CardContent className="space-y-3 p-4">
                 <div className="flex items-center gap-2 font-semibold">
-                  <CreditCard className="h-4 w-4" /> Pagamento via Stripe
+                  <CreditCard className="h-4 w-4" /> Pagamento pendente
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Finalize o Checkout do Stripe. O pedido so muda para pago quando o webhook
-                  assinado confirmar o pagamento.
+                  Seu pagamento ainda não foi confirmado. Clique abaixo para tentar novamente.
                 </p>
+                <Button
+                  className="w-full"
+                  onClick={() =>
+                    router.navigate({
+                      to: "/checkout",
+                      search: { order_id: id } as any,
+                    })
+                  }
+                >
+                  <CreditCard className="h-4 w-4" /> Pagar agora via Stripe
+                </Button>
               </CardContent>
             </Card>
           )}
@@ -335,6 +384,85 @@ function OrderPage() {
             <Card className="border-green-500/30 bg-green-500/5">
               <CardContent className="flex items-center gap-2 p-4 text-sm text-green-300">
                 <CheckCircle2 className="h-4 w-4" /> Pedido finalizado com sucesso.
+              </CardContent>
+            </Card>
+          )}
+
+          {order.status === "released" && isBuyer && !review && (
+            <Card className="border-white/10 bg-card/50">
+              <CardContent className="p-4 space-y-3">
+                <h3 className="font-semibold flex items-center gap-2 text-sm">
+                  <Star className="h-4 w-4 text-yellow-400" /> Avaliar vendedor
+                </h3>
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      className="transition-all duration-150 hover:scale-110"
+                      onMouseEnter={() => setHoverRating(star)}
+                      onMouseLeave={() => setHoverRating(0)}
+                      onClick={() => setRating(star)}
+                    >
+                      <Star
+                        className={`h-7 w-7 ${
+                          star <= (hoverRating || rating)
+                            ? "fill-yellow-400 text-yellow-400"
+                            : "text-white/20"
+                        }`}
+                      />
+                    </button>
+                  ))}
+                  {rating > 0 && (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      {rating === 1 ? "Péssimo" : rating === 2 ? "Ruim" : rating === 3 ? "Regular" : rating === 4 ? "Bom" : "Excelente"}
+                    </span>
+                  )}
+                </div>
+                <Textarea
+                  placeholder="Conte sua experiência (opcional, mínimo 20 caracteres)"
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  className="resize-none text-sm"
+                  rows={3}
+                />
+                <div className="flex items-center justify-between">
+                  <div className="text-[10px] text-muted-foreground">
+                    +5 SP por avaliar · +3 SP por comentário · +5 SP bônus completo
+                  </div>
+                  <Button
+                    onClick={submitReview}
+                    disabled={rating === 0 || submitting}
+                    size="sm"
+                  >
+                    {submitting ? "Enviando..." : "Enviar avaliação"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {order.status === "released" && isBuyer && review && (
+            <Card className="border-yellow-500/20 bg-yellow-500/5">
+              <CardContent className="p-4 space-y-2">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <Star className="h-4 w-4 text-yellow-400" /> Sua avaliação
+                </div>
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Star
+                      key={star}
+                      className={`h-5 w-5 ${
+                        star <= (review as any).rating
+                          ? "fill-yellow-400 text-yellow-400"
+                          : "text-white/20"
+                      }`}
+                    />
+                  ))}
+                </div>
+                {(review as any).comment && (
+                  <p className="text-sm text-muted-foreground">{(review as any).comment}</p>
+                )}
               </CardContent>
             </Card>
           )}

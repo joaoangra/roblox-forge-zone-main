@@ -4,10 +4,9 @@ export const STRIPE_API_VERSION = "2026-05-27.dahlia";
 export const PREMIUM_LOOKUP_KEYS = new Set([
   "buxhub_premium_30d",
   "buxhub_premium_60d",
-  "buxhub_premium_90d",
 ]);
 
-export type PremiumPlan = "premium_30d" | "premium_60d" | "premium_90d";
+export type PremiumPlan = "premium_30d" | "premium_60d";
 
 let stripeClient: Stripe | undefined;
 
@@ -66,8 +65,6 @@ export function premiumDays(plan: string | null | undefined) {
       return 30;
     case "premium_60d":
       return 60;
-    case "premium_90d":
-      return 90;
     default:
       return 30;
   }

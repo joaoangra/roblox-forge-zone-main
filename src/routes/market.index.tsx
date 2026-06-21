@@ -127,7 +127,7 @@ function MarketIndex() {
             </div>
             <div className="flex-1">
               <div className="font-semibold text-sm">Desbloqueie o plano Premium</div>
-              <div className="text-xs text-muted-foreground">Taxas reduzidas, destaque nos anúncios e suporte prioritário por apenas R$ 19,90/mês.</div>
+              <div className="text-xs text-muted-foreground">Taxas reduzidas, destaque nos anúncios e suporte prioritário a partir de R$ 9,90.</div>
             </div>
             <Button variant="outline" size="sm" className="border-yellow-500/30 text-yellow-500 shrink-0">
               Ver planos

@@ -1,10 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageShell } from "@/components/site/PageShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+import { useState, useEffect, useMemo } from "react";
 import {
   ArrowRight,
   Crown,
@@ -24,6 +26,8 @@ import {
   Code2,
   Cpu,
   Users,
+  Clock,
+  Flame,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { getGlobalMetrics } from "@/lib/homeMetrics";
@@ -145,7 +149,7 @@ function Home() {
           </div>
 
           {/* === MÉTRICAS GLOBAIS === */}
-          <div className="mt-14 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 max-w-6xl mx-auto gap-3">
+          <div className="mt-14 grid grid-cols-2 md:grid-cols-4 max-w-2xl mx-auto gap-3">
             {globalMetrics.map((m) => (
               <div key={m.label} className="glass rounded-xl p-3 text-center">
                 <m.icon className="h-4 w-4 mx-auto text-primary mb-1" />
@@ -158,6 +162,9 @@ function Home() {
           </div>
         </div>
       </section>
+
+      {/* === DAILY LOGIN WIDGET === */}
+      {user && <DailyLoginWidget />}
 
       {/* === ECOSYSTEM GRID === */}
       <section className="mx-auto max-w-7xl px-4 py-16">
@@ -208,8 +215,8 @@ function Home() {
             },
             {
               icon: Store,
-              title: "Loja Smiiley",
-              desc: "Troque seus pontos por descontos especiais.",
+              title: "Bux Store",
+              desc: "Troque seus pontos por descontos exclusivos.",
               to: "/shop",
               color: "from-pink-500/20 to-rose-500/20",
             },
@@ -265,7 +272,7 @@ function Home() {
             {
               icon: Crown,
               title: "Premium Acessível",
-              desc: "Acesso a todo o catálogo premium com pagamento via PIX. A partir de R$ 9,90.",
+              desc: "Acesso a todo o catálogo premium com pagamento via Stripe. A partir de R$ 9,90.",
             },
           ].map((f) => (
             <Card key={f.title} className="border-white/10 bg-card/50 card-hover">
@@ -427,7 +434,7 @@ function Home() {
         </div>
       </section>
 
-      {/* === LOJA SMIILEY PREVIEW === */}
+      {/* === BUX STORE PREVIEW === */}
       <section className="mx-auto max-w-7xl px-4 py-10">
         <Card className="border-white/10 bg-card/50 overflow-hidden">
           <CardContent className="p-8 md:p-12 text-center">
@@ -435,15 +442,15 @@ function Home() {
               <Gift className="h-3 w-3" /> Loja Oficial
             </div>
             <h2 className="text-3xl md:text-4xl font-bold mb-3">
-              <span className="text-gradient-brand">Smiiley</span> Store
+              Bux Store
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto mb-6">
               Ganhe pontos comprando e vendendo na plataforma. Troque seus pontos por descontos
-              exclusivos na Loja Oficial Smiiley.
+              exclusivos na Bux Store.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-6 mb-6 text-sm text-muted-foreground">
               <span className="flex items-center gap-1">
-                <Trophy className="h-4 w-4 text-yellow-500" /> Até 5% de desconto
+                <Trophy className="h-4 w-4 text-yellow-500" /> Até 6% de desconto
               </span>
               <span className="flex items-center gap-1">
                 <Star className="h-4 w-4 text-pink-500" /> Produtos exclusivos
@@ -490,5 +497,145 @@ function Home() {
         </section>
       )}
     </PageShell>
+  );
+}
+
+function useCountdown(target: Date) {
+  const [remaining, setRemaining] = useState(target.getTime() - Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setRemaining(Math.max(0, target.getTime() - Date.now())), 1000);
+    return () => clearInterval(id);
+  }, [target]);
+  const s = Math.floor(remaining / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return { h, m, s: sec, total: remaining };
+}
+
+function getNextMidnightBrasil() {
+  const now = new Date();
+  const brasil = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  const next = new Date(brasil);
+  next.setDate(next.getDate() + 1);
+  next.setHours(0, 0, 0, 0);
+  // Convert back to local time for the countdown target
+  const diff = next.getTime() - brasil.getTime();
+  return new Date(now.getTime() + diff);
+}
+
+function DailyLoginWidget() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const [claiming, setClaiming] = useState(false);
+
+  const { data: profile } = useQuery({
+    queryKey: ["home-daily-login", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("profiles")
+        .select("daily_login_streak, last_login_reward")
+        .eq("id", user!.id)
+        .maybeSingle();
+      return (data ?? { daily_login_streak: 0, last_login_reward: null }) as any;
+    },
+  });
+
+  const fmtBrasil = (d: Date) => d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+
+  const canClaim = () => {
+    if (!profile?.last_login_reward) return true;
+    return fmtBrasil(new Date(profile.last_login_reward)) !== fmtBrasil(new Date());
+  };
+
+  const nextMidnight = useMemo(() => getNextMidnightBrasil(), []);
+  const countdown = useCountdown(nextMidnight);
+
+  async function claim() {
+    if (claiming) return;
+    setClaiming(true);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const token = session.session?.access_token;
+      if (!token) return;
+      const res = await fetch("/admin-api/daily-login", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Erro");
+      toast.success(`Login diário! +${data.reward} SP (streak: ${data.streak} dias)`);
+      qc.invalidateQueries({ queryKey: ["home-daily-login"] });
+    } catch {
+      // already claimed
+    }
+    setClaiming(false);
+  }
+
+  const streak = (profile as any)?.daily_login_streak ?? 0;
+  const base = 2;
+  const bonus = streak >= 30 ? 30 : streak >= 7 ? 10 : 0;
+  const reward = base + bonus;
+  const alreadyClaimed = !canClaim();
+
+  return (
+    <section className="mx-auto max-w-7xl px-4 pt-10">
+      <Card className="border-white/10 bg-card/50 overflow-hidden relative group">
+        <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/5 to-amber-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+        <CardContent className="p-5 flex items-center justify-between flex-wrap gap-4 relative">
+          <div className="flex items-center gap-4">
+            <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-yellow-500/20 to-amber-500/20 grid place-items-center group-hover:scale-110 transition-transform duration-300">
+              {streak >= 30 ? (
+                <Trophy className="h-7 w-7 text-yellow-400 animate-pulse" />
+              ) : streak >= 7 ? (
+                <Flame className="h-7 w-7 text-orange-400 animate-pulse" />
+              ) : (
+                <Gift className="h-7 w-7 text-yellow-400" />
+              )}
+            </div>
+            <div>
+              <div className="text-sm font-medium">Bux Rewards — Login Diário</div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Flame className="h-3 w-3 text-orange-400" />
+                Streak: <span className="text-yellow-400 font-medium">{streak}</span> dia{streak !== 1 ? "s" : ""}
+                <span className="text-yellow-400 font-medium">
+                  · +{base} SP{bonus > 0 && ` +${bonus} SP bônus`} = +{reward} SP
+                </span>
+              </div>
+              {streak >= 30 && (
+                <div className="text-[11px] text-yellow-400 font-medium mt-0.5">🏆 Bônus lendário de +30 SP! Streak máxima!</div>
+              )}
+              {streak >= 7 && streak < 30 && (
+                <div className="text-[11px] text-orange-400 font-medium mt-0.5">🔥 Bônus de +10 SP por streak ativa!</div>
+              )}
+              {streak === 29 && (
+                <div className="text-[11px] text-yellow-400/70 mt-0.5">🔥 Mais 1 dia para o bônus lendário de +30 SP!</div>
+              )}
+              {streak === 6 && (
+                <div className="text-[11px] text-yellow-400/70 mt-0.5">Amanhã: bônus de +10 SP! 🔥</div>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-col items-end gap-2">
+            <Button
+              onClick={claim}
+              disabled={alreadyClaimed || claiming}
+              size="sm"
+              variant={alreadyClaimed ? "outline" : "default"}
+              className={`gap-2 transition-all duration-300 ${!alreadyClaimed ? "bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-semibold" : ""}`}
+            >
+              <Clock className="h-4 w-4" />
+              {claiming ? "Reivindicando..." : alreadyClaimed ? "Já reivindicado" : "Reivindicar"}
+            </Button>
+            {alreadyClaimed && (
+              <div className="text-xs text-muted-foreground tabular-nums">
+                Próxima recompensa em <span className="text-yellow-400 font-mono">{String(countdown.h).padStart(2, "0")}:{String(countdown.m).padStart(2, "0")}:{String(countdown.s).padStart(2, "0")}</span>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </section>
   );
 }

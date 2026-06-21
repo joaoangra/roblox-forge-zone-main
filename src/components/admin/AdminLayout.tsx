@@ -17,6 +17,10 @@ import {
   Megaphone,
   ChevronDown,
   Check,
+  BarChart3,
+  UserCheck,
+  Wallet,
+  Scale,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,11 +32,15 @@ type TabId =
   | "users"
   | "logs"
   | "staff"
+  | "kyc"
   | "approvals"
+  | "withdrawals"
+  | "disputes"
   | "finance"
   | "shop"
   | "settings"
-  | "technical";
+  | "technical"
+  | "relatorios";
 
 interface Props {
   activeTab: TabId;
@@ -45,13 +53,17 @@ const NAV_ITEMS: { id: TabId; label: string; icon: React.ElementType; permission
   { id: "tickets", label: "Tickets", icon: Ticket, permission: "tickets.read" },
   { id: "announcements", label: "Avisos", icon: Megaphone, permission: "announcements.create" },
   { id: "users", label: "Usuários", icon: Users, permission: "users.read" },
+  { id: "kyc", label: "KYC", icon: UserCheck, permission: "users.read" },
   { id: "logs", label: "Logs", icon: FileText, permission: "logs.read" },
   { id: "staff", label: "Staff", icon: Shield, permission: "staff.manage" },
   { id: "approvals", label: "Aprovações", icon: Check, permission: "listings.approve" },
+  { id: "withdrawals", label: "Saques", icon: Wallet, permission: "finance.read" },
+  { id: "disputes", label: "Disputas", icon: Scale, permission: "disputes.resolve" },
   { id: "finance", label: "Financeiro", icon: Users, permission: "finance.read" },
-  { id: "shop", label: "Loja Smiley", icon: ShoppingBag, permission: "shop.smiley.manage" },
+  { id: "shop", label: "Bux Store", icon: ShoppingBag, permission: "shop.bux.manage" },
   { id: "settings", label: "Config", icon: Settings, permission: "settings.read" },
   { id: "technical", label: "Técnico", icon: Settings, permission: "technical.read" },
+  { id: "relatorios", label: "Relatórios", icon: BarChart3, permission: "relatorios" },
 ];
 
 export function AdminLayout({ activeTab, onTabChange, children }: Props) {

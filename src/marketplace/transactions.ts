@@ -1,11 +1,13 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { ESCROW_DAYS, PLATFORM_FEE_PCT } from "@/lib/marketplace";
+import { ESCROW_DAYS, PLATFORM_FEE_PCT, PLATFORM_FEE_PCT_NORMAL } from "@/lib/marketplace";
 import { addDays, getBaseUrl, getStripe, json, readJson, requireUser } from "@/stripe/stripe";
 import { releaseTransaction } from "./payouts";
 
 type CreateHeldInput = {
   listingId: string;
   buyerId: string;
+  optionId?: string | null;
+  quantity?: number;
 };
 
 function releaseWarning(releaseAt: string) {
@@ -35,7 +37,7 @@ async function insertSystemMessage(orderId: string, body: string, senderId?: str
   });
 }
 
-export async function createHeldTransaction({ listingId, buyerId }: CreateHeldInput) {
+export async function createHeldTransaction({ listingId, buyerId, optionId, quantity = 1 }: CreateHeldInput) {
   const { data: listing, error: listingError } = await supabaseAdmin
     .from("listings")
     .select("id, seller_id, title, price_cents")
@@ -55,8 +57,29 @@ export async function createHeldTransaction({ listingId, buyerId }: CreateHeldIn
     throw new Error("Seller is not ready to receive Stripe marketplace payments");
   }
 
-  const platformFee = Math.round(listing.price_cents * PLATFORM_FEE_PCT);
-  const sellerAmount = listing.price_cents - platformFee;
+  const { data: sellerProfile } = await supabaseAdmin
+    .from("profiles")
+    .select("is_premium")
+    .eq("id", listing.seller_id)
+    .maybeSingle();
+  const isPremiumSeller = sellerProfile?.is_premium ?? false;
+  const feePct = isPremiumSeller ? PLATFORM_FEE_PCT : PLATFORM_FEE_PCT_NORMAL;
+
+  // Calculate effective price with option adjustment
+  let effectivePrice = listing.price_cents;
+  if (optionId) {
+    const { data: opt } = await supabaseAdmin
+      .from("listing_options")
+      .select("price_adjustment_cents")
+      .eq("id", optionId)
+      .eq("listing_id", listingId)
+      .maybeSingle();
+    if (opt) effectivePrice = listing.price_cents + (opt as any).price_adjustment_cents;
+  }
+  effectivePrice *= Math.max(1, quantity);
+
+  const platformFee = Math.round(effectivePrice * feePct);
+  const sellerAmount = effectivePrice - platformFee;
   const releaseAt = addDays(new Date(), ESCROW_DAYS).toISOString();
 
   const { data: order, error: orderError } = await supabaseAdmin
@@ -65,25 +88,53 @@ export async function createHeldTransaction({ listingId, buyerId }: CreateHeldIn
       listing_id: listing.id,
       buyer_id: buyerId,
       seller_id: listing.seller_id,
-      amount_cents: listing.price_cents,
+      amount_cents: effectivePrice,
       gateway_fee_cents: 0,
       platform_fee_cents: platformFee,
       seller_amount_cents: sellerAmount,
       status: "awaiting_payment",
       payment_method: "stripe",
       auto_release_at: releaseAt,
+      notes: optionId ? JSON.stringify({ option_id: optionId, quantity }) : null,
     })
     .select("id")
     .single();
   if (orderError) throw orderError;
 
-  await supabaseAdmin.from("marketplace_chat_rooms").insert({
-    order_id: order.id,
-    buyer_id: buyerId,
-    seller_id: listing.seller_id,
-  });
+  const { data: room } = await supabaseAdmin
+    .from("marketplace_chat_rooms")
+    .insert({
+      order_id: order.id,
+      buyer_id: buyerId,
+      seller_id: listing.seller_id,
+    })
+    .select("id")
+    .single();
 
   await insertSystemMessage(order.id, releaseWarning(releaseAt), buyerId);
+
+  // BuxHub bot security message
+  if (room) {
+    const botMessages = [
+      "🤖 **Bem-vindo ao chat da transacao!**",
+      "",
+      "Regras de seguranca:",
+      "• Nunca negocie fora da BuxHub",
+      "• Nunca compartilhe dados sensiveis (senha, cookie, token)",
+      "• Nunca envie dinheiro, Robux ou itens fora da plataforma",
+      "• Em caso de duvida, abra um ticket de suporte",
+      "• Todo historico e registrado para sua seguranca",
+      "",
+      "Qualquer tentativa de levar a negociacao para fora sera bloqueada automaticamente.",
+    ].join("\n");
+
+    await supabaseAdmin.from("marketplace_chat_messages").insert({
+      room_id: room.id,
+      sender_id: buyerId,
+      body: botMessages,
+      system_message: true,
+    });
+  }
 
   const { data: transaction, error } = await supabaseAdmin
     .from("transactions")
@@ -92,7 +143,7 @@ export async function createHeldTransaction({ listingId, buyerId }: CreateHeldIn
       seller_id: listing.seller_id,
       listing_id: listing.id,
       marketplace_order_id: order.id,
-      amount_cents: listing.price_cents,
+      amount_cents: effectivePrice,
       platform_fee_cents: platformFee,
       seller_amount_cents: sellerAmount,
       currency: "brl",

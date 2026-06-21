@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { BadgeCheck, Clock, Crown, FileWarning, Image, Package, Plus, ShieldAlert, Infinity, Gamepad2, Share2 } from "lucide-react";
+import { BadgeCheck, Clock, Crown, FileWarning, Image, Package, Plus, ShieldAlert, Infinity, Gamepad2, Share2, Star, Shield, AlertTriangle, XCircle, TrendingUp } from "lucide-react";
 import { slugify, brl, calcOrderSplit } from "@/lib/marketplace";
 
 export const Route = createFileRoute("/sell")({
@@ -71,31 +71,32 @@ function SellerProfileTab() {
   const { data: sp } = useQuery({
     queryKey: ["my-seller", user!.id],
     queryFn: async () =>
-      (await supabase.from("seller_profiles").select("*").eq("user_id", user!.id).maybeSingle())
-        .data,
+      (await (supabase as any).from("seller_profiles").select("*").eq("user_id", user!.id).maybeSingle())
+        .data as any,
   });
   const { data: kyc } = useQuery({
     queryKey: ["my-kyc", user!.id],
     queryFn: async () =>
       (
-        await supabase
-          .from("kyc_verifications")
+        await (supabase as any)
+          .from("seller_verification")
           .select("*")
           .eq("user_id", user!.id)
           .order("created_at", { ascending: false })
+          .limit(1)
           .maybeSingle()
-      ).data,
+      ).data as any,
   });
   const { data: payProfile } = useQuery({
     queryKey: ["seller-payment-profile", user!.id],
     queryFn: async () =>
       (
-        await supabase
+        await (supabase as any)
           .from("profiles")
-          .select("stripe_account_id, seller_verified")
+          .select("stripe_account_id, seller_verified, is_trusted_seller")
           .eq("id", user!.id)
           .maybeSingle()
-      ).data,
+      ).data as any,
   });
 
   const [bio, setBio] = useState("");
@@ -105,6 +106,8 @@ function SellerProfileTab() {
   const [docFile, setDocFile] = useState<File | null>(null);
   const [selfieFile, setSelfieFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const sProfile = sp as any;
 
   async function saveProfile() {
     const { error } = await supabase.from("seller_profiles").upsert({ user_id: user!.id, bio });
@@ -133,11 +136,11 @@ function SellerProfileTab() {
       toast.error("Falha no upload");
       return;
     }
-    const { error } = await supabase.from("kyc_verifications").insert({
+    const { error } = await (supabase as any).from("seller_verification").insert({
       user_id: user!.id,
       full_name: fullName,
       document_type: docType,
-      document_number: docNumber,
+      cpf: docNumber,
       document_front_url: d.data.path,
       selfie_url: s.data.path,
       status: "pending",
@@ -223,17 +226,140 @@ function SellerProfileTab() {
       </Card>
       <Card>
         <CardContent className="p-6 space-y-4">
-          <h2 className="font-semibold flex items-center gap-2">
-            {sp?.verified ? (
-              <BadgeCheck className="h-5 w-5 text-primary" />
-            ) : (
-              <Clock className="h-5 w-5 text-yellow-500" />
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-2">
+              {sProfile?.verified || sProfile?.verification_status === "verified" ? (
+                <BadgeCheck className="h-6 w-6 text-primary" />
+              ) : sProfile?.verification_status === "rejected" ? (
+                <XCircle className="h-6 w-6 text-red-500" />
+              ) : sProfile?.verification_status === "pending" ? (
+                <Clock className="h-6 w-6 text-yellow-500" />
+              ) : (
+                <Shield className="h-6 w-6 text-muted-foreground" />
+              )}
+              <div>
+                <div className="font-semibold flex items-center gap-2">
+                  Verificação
+                  {(payProfile as any)?.is_trusted_seller && (
+                    <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 border-0 text-[10px] flex items-center gap-1">
+                      <Star className="h-3 w-3" /> Trusted
+                    </Badge>
+                  )}
+                </div>
+                <Badge variant="outline" className="capitalize mt-1">
+                  {sProfile?.verification_status === "verified"
+                    ? "Vendedor Verificado"
+                    : sProfile?.verification_status === "rejected"
+                      ? "Rejeitado"
+                      : sProfile?.verification_status === "pending"
+                        ? "Pendente"
+                        : sProfile?.kyc_status ?? "Não verificado"}
+                </Badge>
+              </div>
+            </div>
+            {(!sProfile?.verified && sProfile?.verification_status !== "pending" && sProfile?.verification_status !== "rejected") && (
+              <Button size="sm" asChild>
+                <Link to="/kyc">
+                  <Shield className="h-3 w-3" /> Verificar Agora
+                </Link>
+              </Button>
             )}
-            Status:{" "}
-            <Badge variant="outline" className="capitalize">
-              {sp?.kyc_status ?? "não iniciado"}
-            </Badge>
-          </h2>
+            {sProfile?.verification_status === "rejected" && (
+              <Button size="sm" variant="outline" asChild>
+                <Link to="/kyc">Reenviar Documentos</Link>
+              </Button>
+            )}
+          </div>
+
+          {/* Limits + Premium + Trust info */}
+          <div className="text-xs bg-white/5 rounded-lg p-3 space-y-1">
+            <p className="font-medium text-muted-foreground mb-1">Limites da conta:</p>
+            {sProfile?.verified ? (
+              <>
+                <div className="flex justify-between"><span>Anúncios</span><span className="text-green-500">Ilimitados</span></div>
+                <div className="flex justify-between"><span>Comissão</span><span className="text-green-500">6%</span></div>
+                <div className="flex justify-between"><span>Hold de liberação</span><span className="text-green-500">7 dias</span></div>
+                {(payProfile as any)?.is_trusted_seller && (
+                  <div className="flex justify-between"><span>Status</span><span className="text-amber-500">Vendedor Trusted</span></div>
+                )}
+              </>
+            ) : sProfile?.verification_status === "pending" ? (
+              <>
+                <div className="flex justify-between"><span>Anúncios</span><span className="text-yellow-500">Máx. 3</span></div>
+                <div className="flex justify-between"><span>Vendas</span><span className="text-yellow-500">Máx. R$ 500</span></div>
+                <div className="flex justify-between"><span>Hold de liberação</span><span className="text-yellow-500">14 dias</span></div>
+                <p className="text-muted-foreground mt-1">Aguardando análise da equipe.</p>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-between"><span>Anúncios</span><span className="text-muted-foreground">Máx. 3</span></div>
+                <div className="flex justify-between"><span>Vendas</span><span className="text-muted-foreground">Máx. R$ 500</span></div>
+                <div className="flex justify-between"><span>Comissão</span><span className="text-muted-foreground">10%</span></div>
+                <div className="flex justify-between"><span>Hold de liberação</span><span className="text-muted-foreground">14 dias</span></div>
+                <p className="text-amber-400 mt-1 flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  Verifique-se para aumentar os limites!
+                </p>
+              </>
+            )}
+          </div>
+
+          {/* Premium & Pontos info */}
+          <div className="text-xs bg-gradient-to-r from-amber-500/10 to-yellow-500/10 border border-amber-500/20 rounded-lg p-3 space-y-2">
+            <p className="font-medium text-amber-400 flex items-center gap-1">
+              <Crown className="h-3.5 w-3.5" /> Benefícios Premium
+            </p>
+            <div className="space-y-1 text-muted-foreground">
+              <div className="flex justify-between">
+                <span>Comissão normal</span>
+                <span>10%</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Comissão Premium</span>
+                <span className="text-amber-400 font-medium">6%</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Economia por venda de R$ 100</span>
+                <span className="text-green-500">R$ 4,00</span>
+              </div>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Vendedores Premium pagam apenas <strong className="text-amber-400">6%</strong> de comissão
+              contra <strong>10%</strong> dos vendedores comuns. Quanto mais você vende, mais compensa.
+              <Link to="/premium" className="text-amber-400 hover:underline ml-1">Saiba mais</Link>
+            </p>
+          </div>
+
+          <div className="text-xs bg-gradient-to-r from-sky-500/10 to-blue-500/10 border border-sky-500/20 rounded-lg p-3 space-y-2">
+            <p className="font-medium text-sky-400 flex items-center gap-1">
+              <TrendingUp className="h-3.5 w-3.5" /> Sistema de Confiança (Pontos)
+            </p>
+            <div className="space-y-1 text-muted-foreground">
+              <div className="flex justify-between">
+                <span>Ganha por compra</span>
+                <span className="text-green-500">+50 pts</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Ganha por avaliação</span>
+                <span className="text-green-500">+50 pts</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Ganha por comentário</span>
+                <span className="text-green-500">+10 pts</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Ganha por venda</span>
+                <span className="text-green-500">+100 pts</span>
+              </div>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Quanto mais você participa, mais pontos acumula. Pontos altos aumentam sua
+              reputação e confiança na plataforma, destravando o selo <strong className="text-amber-500">Trusted Seller</strong>
+              e benefícios exclusivos.
+              <Link to="/points" className="text-sky-400 hover:underline ml-1">Ver ranking</Link>
+            </p>
+          </div>
+
           <div>
             <Label>Bio pública</Label>
             <Textarea
@@ -252,9 +378,9 @@ function SellerProfileTab() {
           <h2 className="font-semibold flex items-center gap-2">
             <ShieldAlert className="h-5 w-5 text-primary" /> Verificação KYC
           </h2>
-          {kyc?.status === "approved" ? (
+          {(kyc as any)?.status === "approved" ? (
             <div className="text-sm text-green-400">✓ Aprovado. Você pode anunciar.</div>
-          ) : kyc?.status === "pending" ? (
+          ) : (kyc as any)?.status === "pending" ? (
             <div className="text-sm text-yellow-400">⏳ Em análise pelo time.</div>
           ) : (
             <>
@@ -300,8 +426,8 @@ function SellerProfileTab() {
               <Button onClick={submitKyc} disabled={submitting} className="w-full">
                 {submitting ? "Enviando…" : "Enviar para análise"}
               </Button>
-              {kyc?.status === "rejected" && (
-                <div className="text-sm text-red-400">Rejeitado: {kyc.rejection_reason}</div>
+              {(kyc as any)?.status === "rejected" && (
+                <div className="text-sm text-red-400">Rejeitado: {(kyc as any).rejection_reason}</div>
               )}
             </>
           )}
@@ -369,28 +495,150 @@ function MyListingsTab() {
   return (
     <div className="space-y-2">
       {data.map((l: any) => (
-        <Card key={l.id}>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="h-16 w-16 rounded bg-gradient-to-br from-primary/10 to-accent/10 overflow-hidden">
-              {l.cover_image_url && (
-                <img src={l.cover_image_url} alt="" className="w-full h-full object-cover" />
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold truncate">{l.title}</div>
-              <div className="text-xs text-muted-foreground">
-                {brl(l.price_cents)} ·{" "}
-                <Badge variant="outline" className="text-xs">
-                  {l.status}
-                </Badge>
-              </div>
-            </div>
-            <Button variant="outline" size="sm" onClick={() => del(l.id)}>
-              Excluir
-            </Button>
-          </CardContent>
-        </Card>
+        <ListingItem key={l.id} listing={l} onDelete={del} onUpdate={refetch} />
       ))}
+    </div>
+  );
+}
+
+function ListingItem({ listing, onDelete, onUpdate }: { listing: any; onDelete: (id: string) => void; onUpdate: () => void }) {
+  const [showOptions, setShowOptions] = useState(false);
+
+  return (
+    <Card>
+      <CardContent className="p-4 flex items-center gap-3">
+        <div className="h-16 w-16 rounded bg-gradient-to-br from-primary/10 to-accent/10 overflow-hidden shrink-0">
+          {listing.cover_image_url && (
+            <img src={listing.cover_image_url} alt="" className="w-full h-full object-cover" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold truncate">{listing.title}</div>
+          <div className="text-xs text-muted-foreground">
+            {brl(listing.price_cents)} ·{" "}
+            <Badge variant="outline" className="text-xs">
+              {listing.status}
+            </Badge>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setShowOptions(!showOptions)}>
+            Opções
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => onDelete(listing.id)}>
+            Excluir
+          </Button>
+        </div>
+      </CardContent>
+      {showOptions && <OptionsManager listingId={listing.id} onClose={() => setShowOptions(false)} />}
+    </Card>
+  );
+}
+
+function OptionsManager({ listingId, onClose }: { listingId: string; onClose: () => void }) {
+  const { data: options, refetch } = useQuery({
+    queryKey: ["listing-options-mgr", listingId],
+    queryFn: async () => {
+      const { data: session } = await supabase.auth.getSession();
+      const token = session.session?.access_token;
+      const res = await fetch("/admin-api/list-options", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({ listing_id: listingId }),
+      });
+      const json = await res.json();
+      return json.options ?? [];
+    },
+  });
+
+  const [label, setLabel] = useState("");
+  const [desc, setDesc] = useState("");
+  const [adjustment, setAdjustment] = useState("0");
+
+  async function addOption() {
+    if (!label.trim()) return;
+    const { data: session } = await supabase.auth.getSession();
+    const token = session.session?.access_token;
+    const res = await fetch("/admin-api/create-option", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        listing_id: listingId,
+        label,
+        description: desc,
+        price_adjustment_cents: Math.round((parseFloat(adjustment.replace(",", ".")) || 0) * 100),
+      }),
+    });
+    if (res.ok) {
+      toast.success("Opção adicionada!");
+      setLabel("");
+      setDesc("");
+      setAdjustment("0");
+      refetch();
+    } else {
+      const d = await res.json();
+      toast.error(d.error ?? "Erro");
+    }
+  }
+
+  async function removeOption(id: string) {
+    const { data: session } = await supabase.auth.getSession();
+    const token = session.session?.access_token;
+    await fetch("/admin-api/delete-option", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id }),
+    });
+    refetch();
+  }
+
+  return (
+    <div className="border-t border-white/10 p-4 space-y-3">
+      <div className="text-sm font-semibold flex items-center justify-between">
+        <span>Variações / Opções</span>
+        <Button variant="ghost" size="sm" onClick={onClose}>Fechar</Button>
+      </div>
+      {options && options.length > 0 && (
+        <div className="space-y-1">
+          {options.map((o: any) => (
+            <div key={o.id} className="flex items-center justify-between text-sm bg-white/5 rounded px-3 py-2">
+              <div>
+                <span className="font-medium">{o.label}</span>
+                {o.description && <span className="text-muted-foreground ml-2">— {o.description}</span>}
+                {o.price_adjustment_cents !== 0 && (
+                  <span className={o.price_adjustment_cents > 0 ? "text-green-400 ml-2" : "text-red-400 ml-2"}>
+                    {o.price_adjustment_cents > 0 ? "+" : ""}{brl(o.price_adjustment_cents)}
+                  </span>
+                )}
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => removeOption(o.id)}>×</Button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="grid grid-cols-3 gap-2">
+        <input
+          className="bg-white/5 border border-white/10 rounded px-2 py-1 text-sm"
+          placeholder="Nome da opção"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+        />
+        <input
+          className="bg-white/5 border border-white/10 rounded px-2 py-1 text-sm"
+          placeholder="Descrição (opcional)"
+          value={desc}
+          onChange={(e) => setDesc(e.target.value)}
+        />
+        <div className="flex gap-2">
+          <input
+            className="bg-white/5 border border-white/10 rounded px-2 py-1 text-sm flex-1"
+            placeholder="Ajuste R$"
+            value={adjustment}
+            onChange={(e) => setAdjustment(e.target.value)}
+          />
+          <Button size="sm" onClick={addOption}>+</Button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -417,12 +665,12 @@ function NewListingTab() {
   const { data: cats } = useQuery({
     queryKey: ["mp-cats"],
     queryFn: async () =>
-      (await supabase.from("marketplace_categories").select("*").order("sort_order")).data ?? [],
+      ((await (supabase as any).from("marketplace_categories").select("*").order("sort_order")).data ?? []) as any[],
   });
   const { data: games, refetch: refetchGames } = useQuery({
     queryKey: ["roblox-games"],
     queryFn: async () =>
-      (await supabase.from("roblox_games").select("id, name, slug").order("name")).data ?? [],
+      ((await (supabase as any).from("roblox_games").select("id, name, slug").order("name")).data ?? []) as any[],
   });
   const { data: sp } = useQuery({
     queryKey: ["my-seller", user!.id],
@@ -430,15 +678,21 @@ function NewListingTab() {
       (await supabase.from("seller_profiles").select("*").eq("user_id", user!.id).maybeSingle())
         .data,
   });
+  const { data: sellerProfile } = useQuery({
+    queryKey: ["seller-premium-status", user!.id],
+    queryFn: async () =>
+      (await supabase.from("profiles").select("is_premium").eq("id", user!.id).maybeSingle()).data,
+  });
 
   const priceCents = Math.round((parseFloat(form.price.replace(",", ".")) || 0) * 100);
-  const split = priceCents > 0 ? calcOrderSplit(priceCents) : null;
+  const isPremiumSeller = sellerProfile?.is_premium ?? false;
+  const split = priceCents > 0 ? calcOrderSplit(priceCents, isPremiumSeller) : null;
 
   async function addNewGame() {
     const name = newGameName.trim();
     if (!name) return;
     setAddingGame(true);
-    const { error } = await supabase.from("roblox_games").insert({
+    const { error } = await (supabase as any).from("roblox_games").insert({
       name,
       slug: slugify(name),
       created_by: user!.id,
@@ -451,7 +705,7 @@ function NewListingTab() {
   }
 
   async function publish() {
-    if (!sp?.verified) {
+    if (!(sp as any)?.verified) {
       toast.error("Você precisa ser verificado (KYC aprovado) para publicar.");
       return;
     }
@@ -473,7 +727,7 @@ function NewListingTab() {
       coverUrl = supabase.storage.from("listing-media").getPublicUrl(data.path).data.publicUrl;
     }
     const slug = slugify(form.title);
-    const { data: listing, error } = await supabase.from("listings").insert({
+    const { data: listing, error } = await (supabase as any).from("listings").insert({
       seller_id: user!.id,
       category_id: form.category,
       slug,
@@ -510,7 +764,7 @@ function NewListingTab() {
   return (
     <Card>
       <CardContent className="p-6 space-y-4">
-        {!sp?.verified && (
+        {!(sp as any)?.verified && (
           <div className="flex items-start gap-2 bg-yellow-500/10 border border-yellow-500/30 rounded p-3 text-sm">
             <FileWarning className="h-4 w-4 text-yellow-500 flex-shrink-0 mt-0.5" />
             <span>
@@ -585,41 +839,41 @@ function NewListingTab() {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label>Preço (R$) *</Label>
-            <Input
-              type="text"
-              value={form.price}
-              onChange={(e) => setForm({ ...form, price: e.target.value })}
-              placeholder="10,00"
-            />
-          </div>
-          <div>
-            <Label>Tipo de entrega</Label>
-            <Select
-              value={form.delivery}
-              onValueChange={(v: any) => setForm({ ...form, delivery: v })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="manual">Manual (combinado no chat)</SelectItem>
-                <SelectItem value="instant_code">Código instantâneo</SelectItem>
-                <SelectItem value="service">Serviço (combinado)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label>Estoque</Label>
-            <Input
-              type="number"
-              min="1"
-              value={form.stock}
-              onChange={(e) => setForm({ ...form, stock: e.target.value })}
-              disabled={form.unlimitedStock}
-              placeholder="1"
-            />
+                <Input
+                  type="text"
+                  value={form.price}
+                  onChange={(e) => setForm({ ...form, price: e.target.value })}
+                  placeholder="10,00"
+                />
+              </div>
+              <div>
+                <Label>Tipo de entrega</Label>
+                <Select
+                  value={form.delivery}
+                  onValueChange={(v) => setForm({ ...form, delivery: v as any })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="manual">Manual (combinado no chat)</SelectItem>
+                    <SelectItem value="instant_code">Código instantâneo</SelectItem>
+                    <SelectItem value="service">Serviço (combinado)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Estoque</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={form.stock}
+                  onChange={(e) => setForm({ ...form, stock: e.target.value })}
+                  disabled={form.unlimitedStock}
+                  placeholder="1"
+                />
           </div>
           <div className="flex items-end pb-2">
             <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -664,11 +918,11 @@ function NewListingTab() {
               <span>{brl(split.total)}</span>
             </div>
             <div className="flex justify-between text-muted-foreground">
-              <span>− Gateway PIX (4%)</span>
+              <span>− Taxa Stripe (~3-4%)</span>
               <span>−{brl(split.gateway)}</span>
             </div>
             <div className="flex justify-between text-muted-foreground">
-              <span>− Comissão plataforma (10%)</span>
+              <span>− Comissão plataforma ({Math.round(split.feePct * 100)}%)</span>
               <span>−{brl(split.platform)}</span>
             </div>
             <div className="flex justify-between font-semibold text-primary pt-1 border-t border-white/10">
@@ -676,18 +930,20 @@ function NewListingTab() {
               <span>{brl(split.seller)}</span>
             </div>
           </div>
+          {!isPremiumSeller && (
           <Link to="/premium" className="block">
             <div className="flex items-center gap-2 text-xs bg-gradient-to-r from-yellow-500/10 to-orange-500/5 border border-yellow-500/20 rounded p-2 hover:border-yellow-500/40 transition-colors">
               <Crown className="h-4 w-4 text-yellow-500 shrink-0" />
-              <span className="text-muted-foreground">Assinantes Premium pagam <strong className="text-yellow-500">0% de comissão</strong> e têm anúncios em destaque.</span>
+              <span className="text-muted-foreground">Vire Premium e pague apenas <strong className="text-yellow-500">6% de comissão</strong> (em vez de 10%) + anúncios em destaque.</span>
             </div>
           </Link>
+          )}
           </>
         )}
 
         <Button
           onClick={publish}
-          disabled={saving || !sp?.verified}
+          disabled={saving || !(sp as any)?.verified}
           className="w-full bg-gradient-to-r from-primary to-accent text-white border-0"
         >
           <Plus className="h-4 w-4" /> {saving ? "Publicando…" : "Publicar anúncio"}
@@ -716,14 +972,14 @@ function MySalesTab() {
       (
         await supabase
           .from("listings")
-          .select("id, title, slug, views, sales_count, total_revenue, rating")
+          .select("id, title, slug, views, sales_count, rating")
           .eq("seller_id", user!.id)
           .order("created_at", { ascending: false })
       ).data ?? [],
   });
 
   const totalRevenue = orders?.reduce((s: number, o: any) => s + (o.amount_cents || 0), 0) ?? 0;
-  const completedOrders = orders?.filter((o: any) => o.status === "completed") ?? [];
+  const completedOrders = orders?.filter((o: any) => o.status === "released") ?? [];
   const totalFees = orders?.reduce((s: number, o: any) => s + (o.platform_fee_cents || 0) + (o.gateway_fee_cents || 0), 0) ?? 0;
 
   async function copyListingLink(slug: string) {
@@ -780,7 +1036,7 @@ function MySalesTab() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 ml-2">
-                    {l.total_revenue ? <span className="font-semibold text-xs">{brl(l.total_revenue)}</span> : null}
+                    {l.sales_count ? <span className="font-semibold text-xs">{l.sales_count} vendas</span> : null}
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copyListingLink(l.slug)} title="Copiar link">
                       <Share2 className="h-3 w-3" />
                     </Button>

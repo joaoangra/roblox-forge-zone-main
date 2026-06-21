@@ -100,6 +100,32 @@ async function handleApiRequest(request: Request): Promise<Response | null> {
     return handleResolveDispute(request);
   }
 
+  if (pathname === "/marketplace/create-payment-intent") {
+    const { handleCreatePaymentIntent } = await import("./marketplace/payments");
+    return handleCreatePaymentIntent(request);
+  }
+
+  if (pathname === "/marketplace/order-payment-status") {
+    const { handleGetOrderPaymentStatus } = await import("./marketplace/payments");
+    return handleGetOrderPaymentStatus(request);
+  }
+
+  if (pathname === "/marketplace/stripe-publishable-key") {
+    return new Response(JSON.stringify({ key: process.env.VITE_STRIPE_PUBLISHABLE_KEY || process.env.STRIPE_PUBLISHABLE_KEY || "" }), {
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  if (pathname === "/marketplace/submit-review") {
+    const { handleSubmitReview } = await import("./marketplace/reviews");
+    return handleSubmitReview(request);
+  }
+
+  if (pathname === "/shop/purchase-item") {
+    const { handlePurchaseItem } = await import("./marketplace/shop");
+    return handlePurchaseItem(request);
+  }
+
   return null;
 }
 

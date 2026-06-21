@@ -15,6 +15,7 @@ import {
   HelpCircle,
   Gift,
   Star,
+  Sword,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -28,7 +29,9 @@ export function Header() {
     { to: "/executors", label: "Executores", icon: Cpu },
     { to: "/market", label: "Marketplace", icon: ShoppingBag },
     { to: "/community", label: "Comunidade", icon: MessageCircle },
+    { to: "/support", label: "Suporte", icon: HelpCircle },
     { to: "/premium", label: "Premium", icon: Crown },
+    { to: "/bux-pass", label: "Bux Pass", icon: Sword },
   ];
 
   return (

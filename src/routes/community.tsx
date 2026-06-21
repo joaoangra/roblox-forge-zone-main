@@ -36,7 +36,7 @@ export const Route = createFileRoute("/community")({
 });
 
 function CommunityPage() {
-  const { user } = useAuth();
+  const { user, isStaff } = useAuth();
 
   const { data: announcements } = useQuery({
     queryKey: ["community-announcements"],
@@ -116,9 +116,11 @@ function CommunityPage() {
             <TabsTrigger value="ads">
               <Briefcase className="h-4 w-4" /> Anúncios
             </TabsTrigger>
-            <TabsTrigger value="new-ad">
-              <Rocket className="h-4 w-4" /> Criar Anúncio
-            </TabsTrigger>
+            {isStaff && (
+              <TabsTrigger value="new-ad">
+                <Rocket className="h-4 w-4" /> Criar Anúncio
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="announcements">

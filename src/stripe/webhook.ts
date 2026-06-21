@@ -1,6 +1,6 @@
 import type Stripe from "stripe";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { addDays, getRequiredEnv, getStripe, json, premiumDays } from "./stripe";
+import { addDays, getRequiredEnv, getStripe, json, premiumDays, requireUser } from "./stripe";
 
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
@@ -568,6 +568,10 @@ export async function handleVerifySubscription(request: Request) {
     }
 
     if (userId) {
+      const authUser = await requireUser(request);
+      if (authUser.id !== userId) {
+        return json({ error: "You can only check your own subscription" }, { status: 403 });
+      }
       const { data: profile } = await supabaseAdmin
         .from("profiles")
         .select("stripe_customer_id")

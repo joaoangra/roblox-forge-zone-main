@@ -16,9 +16,12 @@ import { Route as ShopRouteImport } from './routes/shop'
 import { Route as SellRouteImport } from './routes/sell'
 import { Route as PremiumRouteImport } from './routes/premium'
 import { Route as PointsRouteImport } from './routes/points'
+import { Route as KycRouteImport } from './routes/kyc'
 import { Route as ExecutorsRouteImport } from './routes/executors'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as CommunityRouteImport } from './routes/community'
+import { Route as CheckoutRouteImport } from './routes/checkout'
+import { Route as BuxPassRouteImport } from './routes/bux-pass'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
@@ -27,6 +30,7 @@ import { Route as MarketIndexRouteImport } from './routes/market.index'
 import { Route as ScriptsSlugRouteImport } from './routes/scripts.$slug'
 import { Route as OrdersIdRouteImport } from './routes/orders.$id'
 import { Route as MarketSlugRouteImport } from './routes/market.$slug'
+import { Route as CheckoutSuccessRouteImport } from './routes/checkout.success'
 import { Route as MarketOrdersIdRouteImport } from './routes/market.orders.$id'
 
 const WalletRoute = WalletRouteImport.update({
@@ -64,6 +68,11 @@ const PointsRoute = PointsRouteImport.update({
   path: '/points',
   getParentRoute: () => rootRouteImport,
 } as any)
+const KycRoute = KycRouteImport.update({
+  id: '/kyc',
+  path: '/kyc',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ExecutorsRoute = ExecutorsRouteImport.update({
   id: '/executors',
   path: '/executors',
@@ -77,6 +86,16 @@ const DashboardRoute = DashboardRouteImport.update({
 const CommunityRoute = CommunityRouteImport.update({
   id: '/community',
   path: '/community',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CheckoutRoute = CheckoutRouteImport.update({
+  id: '/checkout',
+  path: '/checkout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BuxPassRoute = BuxPassRouteImport.update({
+  id: '/bux-pass',
+  path: '/bux-pass',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -119,6 +138,11 @@ const MarketSlugRoute = MarketSlugRouteImport.update({
   path: '/market/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CheckoutSuccessRoute = CheckoutSuccessRouteImport.update({
+  id: '/success',
+  path: '/success',
+  getParentRoute: () => CheckoutRoute,
+} as any)
 const MarketOrdersIdRoute = MarketOrdersIdRouteImport.update({
   id: '/market/orders/$id',
   path: '/market/orders/$id',
@@ -129,9 +153,12 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
+  '/bux-pass': typeof BuxPassRoute
+  '/checkout': typeof CheckoutRouteWithChildren
   '/community': typeof CommunityRoute
   '/dashboard': typeof DashboardRoute
   '/executors': typeof ExecutorsRoute
+  '/kyc': typeof KycRoute
   '/points': typeof PointsRoute
   '/premium': typeof PremiumRoute
   '/sell': typeof SellRoute
@@ -139,6 +166,7 @@ export interface FileRoutesByFullPath {
   '/support': typeof SupportRoute
   '/tickets': typeof TicketsRoute
   '/wallet': typeof WalletRoute
+  '/checkout/success': typeof CheckoutSuccessRoute
   '/market/$slug': typeof MarketSlugRoute
   '/orders/$id': typeof OrdersIdRoute
   '/scripts/$slug': typeof ScriptsSlugRoute
@@ -150,9 +178,12 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
+  '/bux-pass': typeof BuxPassRoute
+  '/checkout': typeof CheckoutRouteWithChildren
   '/community': typeof CommunityRoute
   '/dashboard': typeof DashboardRoute
   '/executors': typeof ExecutorsRoute
+  '/kyc': typeof KycRoute
   '/points': typeof PointsRoute
   '/premium': typeof PremiumRoute
   '/sell': typeof SellRoute
@@ -160,6 +191,7 @@ export interface FileRoutesByTo {
   '/support': typeof SupportRoute
   '/tickets': typeof TicketsRoute
   '/wallet': typeof WalletRoute
+  '/checkout/success': typeof CheckoutSuccessRoute
   '/market/$slug': typeof MarketSlugRoute
   '/orders/$id': typeof OrdersIdRoute
   '/scripts/$slug': typeof ScriptsSlugRoute
@@ -172,9 +204,12 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
+  '/bux-pass': typeof BuxPassRoute
+  '/checkout': typeof CheckoutRouteWithChildren
   '/community': typeof CommunityRoute
   '/dashboard': typeof DashboardRoute
   '/executors': typeof ExecutorsRoute
+  '/kyc': typeof KycRoute
   '/points': typeof PointsRoute
   '/premium': typeof PremiumRoute
   '/sell': typeof SellRoute
@@ -182,6 +217,7 @@ export interface FileRoutesById {
   '/support': typeof SupportRoute
   '/tickets': typeof TicketsRoute
   '/wallet': typeof WalletRoute
+  '/checkout/success': typeof CheckoutSuccessRoute
   '/market/$slug': typeof MarketSlugRoute
   '/orders/$id': typeof OrdersIdRoute
   '/scripts/$slug': typeof ScriptsSlugRoute
@@ -195,9 +231,12 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/auth'
+    | '/bux-pass'
+    | '/checkout'
     | '/community'
     | '/dashboard'
     | '/executors'
+    | '/kyc'
     | '/points'
     | '/premium'
     | '/sell'
@@ -205,6 +244,7 @@ export interface FileRouteTypes {
     | '/support'
     | '/tickets'
     | '/wallet'
+    | '/checkout/success'
     | '/market/$slug'
     | '/orders/$id'
     | '/scripts/$slug'
@@ -216,9 +256,12 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/auth'
+    | '/bux-pass'
+    | '/checkout'
     | '/community'
     | '/dashboard'
     | '/executors'
+    | '/kyc'
     | '/points'
     | '/premium'
     | '/sell'
@@ -226,6 +269,7 @@ export interface FileRouteTypes {
     | '/support'
     | '/tickets'
     | '/wallet'
+    | '/checkout/success'
     | '/market/$slug'
     | '/orders/$id'
     | '/scripts/$slug'
@@ -237,9 +281,12 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/auth'
+    | '/bux-pass'
+    | '/checkout'
     | '/community'
     | '/dashboard'
     | '/executors'
+    | '/kyc'
     | '/points'
     | '/premium'
     | '/sell'
@@ -247,6 +294,7 @@ export interface FileRouteTypes {
     | '/support'
     | '/tickets'
     | '/wallet'
+    | '/checkout/success'
     | '/market/$slug'
     | '/orders/$id'
     | '/scripts/$slug'
@@ -259,9 +307,12 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   AuthRoute: typeof AuthRoute
+  BuxPassRoute: typeof BuxPassRoute
+  CheckoutRoute: typeof CheckoutRouteWithChildren
   CommunityRoute: typeof CommunityRoute
   DashboardRoute: typeof DashboardRoute
   ExecutorsRoute: typeof ExecutorsRoute
+  KycRoute: typeof KycRoute
   PointsRoute: typeof PointsRoute
   PremiumRoute: typeof PremiumRoute
   SellRoute: typeof SellRoute
@@ -328,6 +379,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PointsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/kyc': {
+      id: '/kyc'
+      path: '/kyc'
+      fullPath: '/kyc'
+      preLoaderRoute: typeof KycRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/executors': {
       id: '/executors'
       path: '/executors'
@@ -347,6 +405,20 @@ declare module '@tanstack/react-router' {
       path: '/community'
       fullPath: '/community'
       preLoaderRoute: typeof CommunityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/checkout': {
+      id: '/checkout'
+      path: '/checkout'
+      fullPath: '/checkout'
+      preLoaderRoute: typeof CheckoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/bux-pass': {
+      id: '/bux-pass'
+      path: '/bux-pass'
+      fullPath: '/bux-pass'
+      preLoaderRoute: typeof BuxPassRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -405,6 +477,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MarketSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/checkout/success': {
+      id: '/checkout/success'
+      path: '/success'
+      fullPath: '/checkout/success'
+      preLoaderRoute: typeof CheckoutSuccessRouteImport
+      parentRoute: typeof CheckoutRoute
+    }
     '/market/orders/$id': {
       id: '/market/orders/$id'
       path: '/market/orders/$id'
@@ -415,13 +494,28 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface CheckoutRouteChildren {
+  CheckoutSuccessRoute: typeof CheckoutSuccessRoute
+}
+
+const CheckoutRouteChildren: CheckoutRouteChildren = {
+  CheckoutSuccessRoute: CheckoutSuccessRoute,
+}
+
+const CheckoutRouteWithChildren = CheckoutRoute._addFileChildren(
+  CheckoutRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   AuthRoute: AuthRoute,
+  BuxPassRoute: BuxPassRoute,
+  CheckoutRoute: CheckoutRouteWithChildren,
   CommunityRoute: CommunityRoute,
   DashboardRoute: DashboardRoute,
   ExecutorsRoute: ExecutorsRoute,
+  KycRoute: KycRoute,
   PointsRoute: PointsRoute,
   PremiumRoute: PremiumRoute,
   SellRoute: SellRoute,

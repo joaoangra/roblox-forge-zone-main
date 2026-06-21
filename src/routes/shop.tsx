@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { PageShell } from "@/components/site/PageShell";
@@ -10,12 +10,13 @@ import { toast } from "sonner";
 import { Gift, ShoppingBag, Star, Tag, Percent } from "lucide-react";
 
 export const Route = createFileRoute("/shop")({
-  head: () => ({ meta: [{ title: "Loja Smiiley – BuxHub" }] }),
+  head: () => ({ meta: [{ title: "Bux Store – BuxHub" }] }),
   component: ShopPage,
 });
 
 function ShopPage() {
   const { user } = useAuth();
+  const qc = useQueryClient();
 
   const { data: items } = useQuery({
     queryKey: ["shop-items"],
@@ -42,23 +43,27 @@ function ShopPage() {
     },
   });
 
-  async function buy(itemId: string, price: number) {
+  async function buy(itemId: string) {
     if (!user) {
       toast.error("Faça login");
       return;
     }
-    const pts = userPoints as any;
-    if (pts.points < price) {
-      toast.error("Pontos insuficientes");
+    const { data: session } = await supabase.auth.getSession();
+    const token = session.session?.access_token;
+    if (!token) return;
+    const res = await fetch("/shop/purchase-item", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ item_id: itemId }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error(d.error ?? "Erro ao comprar item");
       return;
     }
-    const { error } = await (supabase as any)
-      .from("shop_purchases")
-      .insert({ user_id: user.id, item_id: itemId, points_spent: price });
-    if (error) toast.error(error.message);
-    else {
-      toast.success("Item adquirido!");
-    }
+    toast.success("Item adquirido!");
+    qc.invalidateQueries({ queryKey: ["shop-items"] });
+    qc.invalidateQueries({ queryKey: ["my-points", user.id] });
   }
 
   const pts = (userPoints as any) || { points: 0, level: 0 };
@@ -71,7 +76,7 @@ function ShopPage() {
             <Gift className="h-3 w-3" /> Loja Oficial
           </div>
           <h1 className="text-4xl md:text-5xl font-bold">
-            Smiiley <span className="text-gradient-brand">Store</span>
+            Bux Store
           </h1>
           <p className="text-muted-foreground mt-3 max-w-2xl mx-auto">
             Troque seus pontos BuxHub por descontos exclusivos e produtos especiais.
@@ -106,8 +111,8 @@ function ShopPage() {
                     {item.price_points} pts
                   </div>
                   <Button
-                    onClick={() => buy(item.id, item.price_points)}
-                    disabled={!user || pts.points < item.price_points}
+                    onClick={() => buy(item.id)}
+                    disabled={!user || (pts.points ?? 0) < item.price_points}
                     className="w-full bg-gradient-to-r from-pink-500 to-rose-500 text-white border-0"
                   >
                     <ShoppingBag className="h-4 w-4" /> Adquirir

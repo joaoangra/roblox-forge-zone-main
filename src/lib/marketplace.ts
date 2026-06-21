@@ -1,13 +1,15 @@
 export const PLATFORM_FEE_PCT = 0.06;
+export const PLATFORM_FEE_PCT_NORMAL = 0.10;
 export const GATEWAY_FEE_PCT = 0;
 export const ESCROW_DAYS = 7;
 
-export function calcOrderSplit(priceCents: number) {
+export function calcOrderSplit(priceCents: number, isPremiumSeller = false) {
+  const feePct = isPremiumSeller ? PLATFORM_FEE_PCT : PLATFORM_FEE_PCT_NORMAL;
   const gateway = Math.round(priceCents * GATEWAY_FEE_PCT);
   const afterGateway = priceCents - gateway;
-  const platform = Math.round(afterGateway * PLATFORM_FEE_PCT);
+  const platform = Math.round(afterGateway * feePct);
   const seller = afterGateway - platform;
-  return { gateway, platform, seller, total: priceCents };
+  return { gateway, platform, seller, total: priceCents, feePct };
 }
 
 export function brl(cents: number) {

@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,6 +22,8 @@ import {
   AlertTriangle,
   Plus,
   Clock,
+  Paperclip,
+  ImageIcon,
 } from "lucide-react";
 
 export const Route = createFileRoute("/support")({
@@ -71,11 +73,13 @@ type TicketRow = {
 
 function SupportPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const qc = useQueryClient();
   const [selectedCategory, setSelectedCategory] = useState("");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
+  const [attachFile, setAttachFile] = useState<File | null>(null);
 
   const { data: tickets } = useQuery({
     queryKey: ["my-tickets", user?.id],
@@ -85,6 +89,7 @@ function SupportPage() {
         .from("tickets")
         .select("id, subject, category, status, created_at")
         .eq("user_id", user!.id)
+        .is("archived_at", null)
         .order("created_at", { ascending: false })
         .limit(20);
 
@@ -105,6 +110,27 @@ function SupportPage() {
 
     // Map the support category to the DB ticket_category enum
     const dbCategory = mapCategoryToTicketEnum(selectedCategory);
+
+    // Upload attachment if present
+    let attachmentUrl: string | null = null;
+    if (attachFile) {
+      if (!attachFile.type.startsWith("image/")) {
+        toast.error("Envie apenas imagens/prints.");
+        setSending(false);
+        return;
+      }
+      const safeName = attachFile.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+      const path = `${user.id}/${Date.now()}-${safeName}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("support-attachments")
+        .upload(path, attachFile);
+      if (uploadError) {
+        toast.error(uploadError.message);
+        setSending(false);
+        return;
+      }
+      attachmentUrl = uploadData.path;
+    }
 
     // 1) Insert into tickets table
     const { data: t, error } = await supabase
@@ -130,6 +156,7 @@ function SupportPage() {
         ticket_id: t.id,
         sender_id: user.id,
         body: message,
+        attachment_url: attachmentUrl,
       });
 
     setSending(false);
@@ -143,24 +170,38 @@ function SupportPage() {
     setSelectedCategory("");
     setSubject("");
     setMessage("");
+    setAttachFile(null);
     qc.invalidateQueries({ queryKey: ["my-tickets"] });
+    router.navigate({ to: "/tickets" });
   }
 
   const statusBadge = (status: string) => {
-    const map: Record<string, { label: string; cls: string }> = {
-      open: { label: "Aberto", cls: "bg-green-500/20 text-green-400 border-green-500/30" },
+    const map: Record<string, { label: string; hint: string; cls: string }> = {
+      open: { label: "Aberto", hint: "Aguardando atendimento", cls: "bg-green-500/20 text-green-400 border-green-500/30" },
       in_progress: {
         label: "Em andamento",
+        hint: "Equipe já está analisando",
         cls: "bg-blue-500/20 text-blue-400 border-blue-500/30",
       },
       waiting_user: {
         label: "Aguardando resposta",
+        hint: "Precisa de mais informações suas",
         cls: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
       },
-      resolved: { label: "Resolvido", cls: "bg-green-500/20 text-green-400 border-green-500/30" },
-      closed: { label: "Fechado", cls: "bg-muted text-muted-foreground border-white/10" },
+      resolved: { label: "Resolvido", hint: "Problema solucionado", cls: "bg-green-500/20 text-green-400 border-green-500/30" },
+      closed: { label: "Fechado", hint: "Ticket encerrado", cls: "bg-muted text-muted-foreground border-white/10" },
     };
     return map[status] ?? map.open;
+  };
+
+  // Map DB ticket_category enum values to Portuguese labels
+  const catLabel: Record<string, string> = {
+    support: "Suporte",
+    financial: "Financeiro",
+    dispute: "Disputa",
+    sales: "Vendas",
+    bug: "Bug",
+    security: "Segurança",
   };
 
   return (
@@ -191,9 +232,13 @@ function SupportPage() {
           <TabsContent value="new">
             <Card className="border-white/10 bg-card/50 max-w-2xl mx-auto">
               <CardContent className="p-6 space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Escolha a categoria e descreva seu problema. Responderemos o mais rápido possível.
-                </p>
+                <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 text-sm">
+                  <p className="font-medium text-primary mb-1">📋 Como funciona?</p>
+                  <p className="text-muted-foreground">
+                    1. Escolha a categoria do seu problema &rarr; 2. Descreva com detalhes &rarr; 3. 
+                    Acompanhe a resposta pelos <strong>e-mails</strong> ou acesse a página de tickets.
+                  </p>
+                </div>
                 <div>
                   <label className="text-sm font-medium mb-2 block">Categoria</label>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -230,6 +275,17 @@ function SupportPage() {
                     placeholder="Descreva detalhadamente seu problema..."
                   />
                 </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Print / Imagem (opcional)</label>
+                  <label className="flex items-center gap-2 rounded-lg border border-input px-3 py-2 cursor-pointer hover:bg-accent text-sm text-muted-foreground">
+                    <Paperclip className="h-4 w-4" />
+                    {attachFile ? attachFile.name : "Anexar print do erro"}
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => setAttachFile(e.target.files?.[0] ?? null)} />
+                  </label>
+                  {attachFile && (
+                    <p className="text-xs text-muted-foreground mt-1">📎 {attachFile.name}</p>
+                  )}
+                </div>
                 <Button
                   onClick={openTicket}
                   disabled={sending}
@@ -247,7 +303,7 @@ function SupportPage() {
                 {(tickets ?? []).map((t) => {
                   const s = statusBadge(t.status);
                   return (
-                    <Card key={t.id} className="border-white/10 bg-card/50">
+                    <Card key={t.id} className="border-white/10 bg-card/50 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => router.navigate({ to: "/tickets" })}>
                       <CardContent className="p-5">
                         <div className="flex items-center justify-between gap-3">
                           <div className="flex-1 min-w-0">
@@ -258,8 +314,10 @@ function SupportPage() {
                               </span>
                             </div>
                             <div className="text-xs text-muted-foreground mt-1">
-                              {categories.find((c) => c.value === t.category)?.label ?? t.category}{" "}
-                              · {new Date(t.created_at).toLocaleString("pt-BR")}
+                              {catLabel[t.category] ?? t.category} · {new Date(t.created_at).toLocaleString("pt-BR")}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground/60 mt-0.5">
+                              {statusBadge(t.status).hint}
                             </div>
                           </div>
                         </div>

@@ -35,7 +35,7 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
--- listings.seller_id -> profiles.id (for smiley store + regular listings)
+-- listings.seller_id -> profiles.id (for bux store + regular listings)
 DO $$ BEGIN
   ALTER TABLE public.listings
     ADD CONSTRAINT listings_seller_id_profiles_fkey
