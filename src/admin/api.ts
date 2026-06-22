@@ -211,8 +211,36 @@ export async function handleAdminApi(request: Request) {
         return recordView(body);
       case "like-script":
         return likeScript(actor.id, body);
+      case "dislike-script":
+        return dislikeScript(actor.id, body);
+      case "favorite-script":
+        return favoriteScript(actor.id, body);
+      case "report-script":
+        return reportScript(actor.id, body);
+      case "download-script":
+        return downloadScript(actor.id, body);
       case "submit-script":
         return submitScript(actor.id, body);
+      case "like-executor":
+        return likeExecutor(actor.id, body);
+      case "dislike-executor":
+        return dislikeExecutor(actor.id, body);
+      case "review-executor":
+        return reviewExecutor(actor.id, body);
+      case "comment-executor":
+        return commentExecutor(actor.id, body);
+      case "list-executors":
+        assertPermission(actor, "shop.bux.manage");
+        return listExecutors();
+      case "create-executor":
+        assertPermission(actor, "shop.bux.manage");
+        return createExecutor(actor.id, body);
+      case "update-executor":
+        assertPermission(actor, "shop.bux.manage");
+        return updateExecutor(actor.id, body);
+      case "delete-executor":
+        assertPermission(actor, "shop.bux.manage");
+        return deleteExecutor(actor.id, body);
       default:
         return json({ error: "Unknown admin action" }, { status: 404 });
     }
@@ -1262,63 +1290,112 @@ async function dailyLogin(actorId: string) {
 async function likeScript(actorId: string, body: AdminBody) {
   const scriptId = requiredString(body.script_id, "script_id");
 
-  const { data: script } = await (sba as any).from("scripts").select("likes_count, liked_by, user_id").eq("id", scriptId).maybeSingle();
+  const { data: script } = await (sba as any).from("scripts").select("likes_count, liked_by, dislikes_count, disliked_by, user_id").eq("id", scriptId).maybeSingle();
   if (!script) return json({ error: "Script not found" }, { status: 404 });
 
   const likedBy: string[] = script.liked_by ?? [];
+  const dislikedBy: string[] = script.disliked_by ?? [];
   const alreadyLiked = likedBy.includes(actorId);
 
-  let newCount = script.likes_count ?? 0;
+  let newLikesCount = script.likes_count ?? 0;
+  let newDislikesCount = script.dislikes_count ?? 0;
   let updatedLikedBy: string[];
+  let updatedDislikedBy: string[] = dislikedBy;
 
   if (alreadyLiked) {
-    // Unlike - remove user from array
     updatedLikedBy = likedBy.filter((id: string) => id !== actorId);
-    newCount = Math.max(0, newCount - 1);
+    newLikesCount = Math.max(0, newLikesCount - 1);
   } else {
-    // Like - add user to array
     updatedLikedBy = [...likedBy, actorId];
-    newCount = newCount + 1;
+    newLikesCount = newLikesCount + 1;
 
-    // Check milestones for the script author (cap 5 SP/day total from likes)
-    if (script.user_id) {
-      const { count: todayLikeSp } = await sba.from("point_transactions")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", script.user_id)
-        .eq("reference_type", "like")
-        .gte("created_at", new Date().toISOString().split("T")[0]);
-
-      if ((todayLikeSp ?? 0) < 5) {
-        for (const milestone of [10, 50, 100]) {
-          if (newCount >= milestone) {
-            const { data: ms } = await sba.from("point_transactions")
-              .select("id")
-              .eq("user_id", script.user_id)
-              .eq("reason", `${milestone} curtidas!`)
-              .maybeSingle();
-            if (!ms) {
-              const reward = milestone === 10 ? 1 : milestone === 50 ? 3 : 5;
-              const capRemaining = 5 - (todayLikeSp ?? 0);
-              const award = Math.min(reward, capRemaining);
-              if (award > 0) {
-                await sba.rpc("award_points_capped", {
-                  p_user_id: script.user_id,
-                  p_amount: award,
-                  p_reason: `${milestone} curtidas!`,
-                  p_reference_type: "like",
-                  p_reference_id: scriptId,
-                });
-              }
-            }
-          }
-        }
-      }
+    // Remove user from disliked_by (mutex)
+    if (dislikedBy.includes(actorId)) {
+      updatedDislikedBy = dislikedBy.filter((id: string) => id !== actorId);
+      newDislikesCount = Math.max(0, newDislikesCount - 1);
     }
   }
 
-  await (sba as any).from("scripts").update({ likes_count: newCount, liked_by: updatedLikedBy }).eq("id", scriptId);
+  const updates: Record<string, any> = { likes_count: newLikesCount, liked_by: updatedLikedBy };
+  if (updatedDislikedBy !== dislikedBy) {
+    updates.disliked_by = updatedDislikedBy;
+    updates.dislikes_count = newDislikesCount;
+  }
 
-  return json({ ok: true, likes_count: newCount, liked: !alreadyLiked });
+  await (sba as any).from("scripts").update(updates).eq("id", scriptId);
+
+  return json({ ok: true, likes_count: newLikesCount, dislikes_count: newDislikesCount, liked: !alreadyLiked });
+}
+
+async function dislikeScript(actorId: string, body: AdminBody) {
+  const scriptId = requiredString(body.script_id, "script_id");
+  const { data: script } = await (sba as any).from("scripts").select("dislikes_count, disliked_by, likes_count, liked_by").eq("id", scriptId).maybeSingle();
+  if (!script) return json({ error: "Script not found" }, { status: 404 });
+
+  const dislikedBy: string[] = script.disliked_by ?? [];
+  const alreadyDisliked = dislikedBy.includes(actorId);
+
+  if (alreadyDisliked) {
+    const updated = dislikedBy.filter((id: string) => id !== actorId);
+    await (sba as any).from("scripts").update({ dislikes_count: Math.max(0, (script.dislikes_count ?? 0) - 1), disliked_by: updated }).eq("id", scriptId);
+    return json({ ok: true, dislikes_count: Math.max(0, (script.dislikes_count ?? 0) - 1), disliked: false });
+  }
+
+  const updatedDisliked = [...dislikedBy, actorId];
+  const updates: Record<string, any> = { dislikes_count: (script.dislikes_count ?? 0) + 1, disliked_by: updatedDisliked };
+
+  // If user had liked, remove like first
+  const likedBy: string[] = script.liked_by ?? [];
+  if (likedBy.includes(actorId)) {
+    updates.liked_by = likedBy.filter((id: string) => id !== actorId);
+    updates.likes_count = Math.max(0, (script.likes_count ?? 0) - 1);
+  }
+
+  await (sba as any).from("scripts").update(updates).eq("id", scriptId);
+  return json({ ok: true, dislikes_count: (script.dislikes_count ?? 0) + 1, likes_count: updates.likes_count ?? script.likes_count, disliked: true });
+}
+
+async function favoriteScript(actorId: string, body: AdminBody) {
+  const scriptId = requiredString(body.script_id, "script_id");
+  const { data: script } = await (sba as any).from("scripts").select("favorites_count, favorited_by").eq("id", scriptId).maybeSingle();
+  if (!script) return json({ error: "Script not found" }, { status: 404 });
+
+  const favoritedBy: string[] = script.favorited_by ?? [];
+  const alreadyFavorited = favoritedBy.includes(actorId);
+
+  if (alreadyFavorited) {
+    const updated = favoritedBy.filter((id: string) => id !== actorId);
+    await (sba as any).from("scripts").update({ favorites_count: Math.max(0, (script.favorites_count ?? 0) - 1), favorited_by: updated }).eq("id", scriptId);
+    return json({ ok: true, favorites_count: Math.max(0, (script.favorites_count ?? 0) - 1), favorited: false });
+  }
+
+  const updated = [...favoritedBy, actorId];
+  await (sba as any).from("scripts").update({ favorites_count: (script.favorites_count ?? 0) + 1, favorited_by: updated }).eq("id", scriptId);
+  return json({ ok: true, favorites_count: (script.favorites_count ?? 0) + 1, favorited: true });
+}
+
+async function reportScript(actorId: string, body: AdminBody) {
+  const scriptId = requiredString(body.script_id, "script_id");
+  const reason = requiredString(body.reason, "reason");
+  const description = String(body.description ?? "").trim() || null;
+
+  // Check if user already reported this script
+  const { data: existing } = await (sba as any).from("script_reports").select("id").eq("script_id", scriptId).eq("user_id", actorId).maybeSingle();
+  if (existing) return json({ error: "Você já denunciou este script" }, { status: 400 });
+
+  const { error } = await (sba as any).from("script_reports").insert({ script_id: scriptId, user_id: actorId, reason, description });
+  if (error) throw error;
+  return json({ ok: true });
+}
+
+async function downloadScript(actorId: string, body: AdminBody) {
+  const scriptId = requiredString(body.script_id, "script_id");
+  const { data: script } = await (sba as any).from("scripts").select("downloads_count, code, title").eq("id", scriptId).maybeSingle();
+  if (!script) return json({ error: "Script not found" }, { status: 404 });
+
+  await (sba as any).from("scripts").update({ downloads_count: (script.downloads_count ?? 0) + 1 }).eq("id", scriptId);
+
+  return json({ ok: true, code: script.code, title: script.title });
 }
 
 async function updateScript(actorId: string, body: AdminBody) {
@@ -1467,4 +1544,159 @@ function requiredString(value: unknown, field: string) {
   const text = String(value ?? "").trim();
   if (!text) throw new Error(`${field} is required`);
   return text;
+}
+
+// ============ EXECUTOR APIS ============
+
+async function likeExecutor(actorId: string, body: AdminBody) {
+  const executorId = requiredString(body.executor_id, "executor_id");
+  const { data: ex } = await (sba as any).from("executors").select("likes_count, liked_by, dislikes_count, disliked_by").eq("id", executorId).maybeSingle();
+  if (!ex) return json({ error: "Executor not found" }, { status: 404 });
+  const likedBy: string[] = ex.liked_by ?? [];
+  const dislikedBy: string[] = ex.disliked_by ?? [];
+  const alreadyLiked = likedBy.includes(actorId);
+  let newLikes = ex.likes_count ?? 0;
+  let newDislikes = ex.dislikes_count ?? 0;
+  let updatedLiked: string[];
+  let updatedDisliked: string[] = dislikedBy;
+  if (alreadyLiked) {
+    updatedLiked = likedBy.filter((id: string) => id !== actorId);
+    newLikes = Math.max(0, newLikes - 1);
+  } else {
+    updatedLiked = [...likedBy, actorId];
+    newLikes = newLikes + 1;
+    if (dislikedBy.includes(actorId)) {
+      updatedDisliked = dislikedBy.filter((id: string) => id !== actorId);
+      newDislikes = Math.max(0, newDislikes - 1);
+    }
+  }
+  const updates: Record<string, any> = { likes_count: newLikes, liked_by: updatedLiked };
+  if (updatedDisliked !== dislikedBy) { updates.disliked_by = updatedDisliked; updates.dislikes_count = newDislikes; }
+  await (sba as any).from("executors").update(updates).eq("id", executorId);
+  return json({ ok: true, likes_count: newLikes, dislikes_count: newDislikes, liked: !alreadyLiked });
+}
+
+async function dislikeExecutor(actorId: string, body: AdminBody) {
+  const executorId = requiredString(body.executor_id, "executor_id");
+  const { data: ex } = await (sba as any).from("executors").select("dislikes_count, disliked_by, likes_count, liked_by").eq("id", executorId).maybeSingle();
+  if (!ex) return json({ error: "Executor not found" }, { status: 404 });
+  const dislikedBy: string[] = ex.disliked_by ?? [];
+  const alreadyDisliked = dislikedBy.includes(actorId);
+  if (alreadyDisliked) {
+    const updated = dislikedBy.filter((id: string) => id !== actorId);
+    await (sba as any).from("executors").update({ dislikes_count: Math.max(0, (ex.dislikes_count ?? 0) - 1), disliked_by: updated }).eq("id", executorId);
+    return json({ ok: true, dislikes_count: Math.max(0, (ex.dislikes_count ?? 0) - 1), disliked: false, likes_count: ex.likes_count ?? 0 });
+  }
+  const updatedDisliked = [...dislikedBy, actorId];
+  const updates: Record<string, any> = { dislikes_count: (ex.dislikes_count ?? 0) + 1, disliked_by: updatedDisliked };
+  const likedBy: string[] = ex.liked_by ?? [];
+  if (likedBy.includes(actorId)) {
+    updates.liked_by = likedBy.filter((id: string) => id !== actorId);
+    updates.likes_count = Math.max(0, (ex.likes_count ?? 0) - 1);
+  }
+  await (sba as any).from("executors").update(updates).eq("id", executorId);
+  return json({ ok: true, dislikes_count: (ex.dislikes_count ?? 0) + 1, likes_count: updates.likes_count ?? ex.likes_count, disliked: true });
+}
+
+async function reviewExecutor(actorId: string, body: AdminBody) {
+  const executorId = requiredString(body.executor_id, "executor_id");
+  const rating = Math.round(Number(body.rating));
+  if (rating < 1 || rating > 5) return json({ error: "Rating must be 1-5" }, { status: 400 });
+  const { data: existing } = await (sba as any).from("executor_reviews").select("id").eq("executor_id", executorId).eq("user_id", actorId).maybeSingle();
+  if (existing) return json({ error: "Você já avaliou este executor" }, { status: 400 });
+  const { error } = await (sba as any).from("executor_reviews").insert({
+    executor_id: executorId,
+    user_id: actorId,
+    rating,
+    title: body.title ? String(body.title).trim() || null : null,
+    content: body.content ? String(body.content).trim() || null : null,
+    is_working: body.is_working === true || body.is_working === false ? body.is_working : null,
+    is_detected: body.is_detected === true || body.is_detected === false ? body.is_detected : null,
+    has_bugs: body.has_bugs === true || body.has_bugs === false ? body.has_bugs : null,
+  });
+  if (error) throw error;
+  return json({ ok: true });
+}
+
+async function commentExecutor(actorId: string, body: AdminBody) {
+  const executorId = requiredString(body.executor_id, "executor_id");
+  const content = String(body.content ?? "").trim();
+  if (!content) return json({ error: "Content is required" }, { status: 400 });
+  const { error } = await (sba as any).from("executor_comments").insert({ executor_id: executorId, user_id: actorId, content });
+  if (error) throw error;
+  return json({ ok: true });
+}
+
+async function listExecutors() {
+  const { data, error } = await (sba as any).from("executors").select("*").order("created_at", { ascending: false });
+  if (error) throw error;
+  return json({ executors: data ?? [] });
+}
+
+async function createExecutor(actorId: string, body: AdminBody) {
+  const name = requiredString(body.name, "name");
+  const slug = requiredString(body.slug, "slug");
+  const downloadUrl = requiredString(body.download_url, "download_url");
+  const { data, error } = await (sba as any).from("executors").insert({
+    name,
+    slug,
+    description: String(body.description ?? "").trim() || null,
+    long_description: String(body.long_description ?? "").trim() || null,
+    download_url: downloadUrl,
+    image_url: String(body.image_url ?? "").trim() || null,
+    price_brl: Number(body.price_brl ?? 0),
+    is_free: body.is_free !== false,
+    platform: Array.isArray(body.platform) ? body.platform.map(String) : ["Windows"],
+    supported_games: Array.isArray(body.supported_games) ? body.supported_games.map(String) : [],
+    is_featured: body.is_featured === true,
+    status: String(body.status ?? "offline"),
+    security_status: String(body.security_status ?? "undetected"),
+    safety_level: String(body.safety_level ?? "safe"),
+    detection_status: String(body.detection_status ?? "undetected"),
+    is_recommended: body.is_recommended === true,
+    version: String(body.version ?? "").trim() || null,
+    key_system: body.key_system === true,
+    official_site: String(body.official_site ?? "").trim() || null,
+    discord_url: String(body.discord_url ?? "").trim() || null,
+    github_url: String(body.github_url ?? "").trim() || null,
+    tutorial_url: String(body.tutorial_url ?? "").trim() || null,
+    downloads_json: Array.isArray(body.downloads) ? body.downloads : [],
+    trust_score: Math.min(100, Math.max(0, Number(body.trust_score ?? 0))),
+    trust_score_components: body.trust_score_components || null,
+    developer: String(body.developer ?? "").trim() || null,
+    execution_method: String(body.execution_method ?? "").trim() || null,
+    requirements: String(body.requirements ?? "").trim() || null,
+    features: Array.isArray(body.features) ? body.features.map(String) : [],
+    badges: Array.isArray(body.badges) ? body.badges.map(String) : [],
+  }).select("*").single();
+  if (error) throw error;
+  await audit(actorId, "executor.created", "executor", data.id, { name });
+  return json({ executor: data });
+}
+
+async function updateExecutor(actorId: string, body: AdminBody) {
+  const id = requiredString(body.id, "id");
+  const fields = ["name", "slug", "description", "long_description", "download_url", "image_url", "price_brl", "is_free", "platform", "supported_games", "is_featured", "status", "security_status", "safety_level", "detection_status", "is_recommended", "version", "key_system", "official_site", "discord_url", "github_url", "tutorial_url", "trust_score", "trust_score_components", "developer", "execution_method", "requirements", "features", "badges"];
+  const updates: Record<string, any> = {};
+  for (const f of fields) {
+    if (body[f] !== undefined) {
+      if (f === "price_brl" || f === "trust_score") updates[f] = Number(body[f]);
+      else if (f === "is_free" || f === "is_featured" || f === "key_system") updates[f] = Boolean(body[f]);
+      else if (Array.isArray(body[f])) updates[f] = body[f].map(String);
+      else updates[f] = String(body[f]).trim() || null;
+    }
+  }
+  if (body.downloads !== undefined) updates.downloads_json = body.downloads;
+  const { error } = await (sba as any).from("executors").update(updates).eq("id", id);
+  if (error) throw error;
+  await audit(actorId, "executor.updated", "executor", id, updates);
+  return json({ ok: true });
+}
+
+async function deleteExecutor(actorId: string, body: AdminBody) {
+  const id = requiredString(body.id, "id");
+  const { error } = await (sba as any).from("executors").delete().eq("id", id);
+  if (error) throw error;
+  await audit(actorId, "executor.deleted", "executor", id);
+  return json({ ok: true });
 }

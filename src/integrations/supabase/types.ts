@@ -149,6 +149,53 @@ type ExecutorRow = {
   downloads: number;
   created_at: string;
   updated_at: string;
+  status: string;
+  security_status: string;
+  safety_level: string;
+  detection_status: string;
+  is_recommended: boolean;
+  version: string | null;
+  key_system: boolean;
+  official_site: string | null;
+  discord_url: string | null;
+  github_url: string | null;
+  tutorial_url: string | null;
+  downloads_json: Record<string, any>[] | null;
+  trust_score: number;
+  trust_score_components: Record<string, any> | null;
+  rating: number;
+  likes_count: number;
+  dislikes_count: number;
+  liked_by: string[] | null;
+  disliked_by: string[] | null;
+  badges: string[] | null;
+  rank: number | null;
+  developer: string | null;
+  execution_method: string | null;
+  requirements: string | null;
+  features: string[] | null;
+  review_count: number;
+};
+
+type ExecutorReviewRow = {
+  id: string;
+  executor_id: string;
+  user_id: string;
+  rating: number;
+  title: string | null;
+  content: string | null;
+  is_working: boolean | null;
+  is_detected: boolean | null;
+  has_bugs: boolean | null;
+  created_at: string;
+};
+
+type ExecutorCommentRow = {
+  id: string;
+  executor_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
 };
 
 type PremiumPlanRow = {
@@ -481,10 +528,9 @@ export interface Database {
       user_roles: Table<UserRoleRow, Partial<UserRoleRow> & { user_id: string; role: AppRole }>;
       categories: Table<CategoryRow, Partial<CategoryRow> & { name: string; slug: string }>;
       scripts: Table<ScriptRow, Partial<ScriptRow> & { title: string; slug: string; code: string }>;
-      executors: Table<
-        ExecutorRow,
-        Partial<ExecutorRow> & { name: string; slug: string; download_url: string }
-      >;
+      executors: Table<ExecutorRow, Partial<ExecutorRow> & { name: string; slug: string; download_url: string }>;
+      executor_reviews: Table<ExecutorReviewRow, Partial<ExecutorReviewRow> & { executor_id: string; user_id: string; rating: number }>;
+      executor_comments: Table<ExecutorCommentRow, Partial<ExecutorCommentRow> & { executor_id: string; user_id: string; content: string }>;
       premium_plans: Table<
         PremiumPlanRow,
         Partial<PremiumPlanRow> & { name: string; duration_days: number; price_brl: number }

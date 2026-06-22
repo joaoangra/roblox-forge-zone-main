@@ -21,6 +21,7 @@ import {
   UserCheck,
   Wallet,
   Scale,
+  Cpu,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +39,7 @@ type TabId =
   | "disputes"
   | "finance"
   | "shop"
+  | "executores"
   | "settings"
   | "technical"
   | "relatorios";
@@ -61,6 +63,7 @@ const NAV_ITEMS: { id: TabId; label: string; icon: React.ElementType; permission
   { id: "disputes", label: "Disputas", icon: Scale, permission: "disputes.resolve" },
   { id: "finance", label: "Financeiro", icon: Users, permission: "finance.read" },
   { id: "shop", label: "Bux Store", icon: ShoppingBag, permission: "shop.bux.manage" },
+  { id: "executores", label: "Executores", icon: Cpu, permission: "shop.bux.manage" },
   { id: "settings", label: "Config", icon: Settings, permission: "settings.read" },
   { id: "technical", label: "Técnico", icon: Settings, permission: "technical.read" },
   { id: "relatorios", label: "Relatórios", icon: BarChart3, permission: "relatorios" },

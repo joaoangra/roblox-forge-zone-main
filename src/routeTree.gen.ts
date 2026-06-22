@@ -30,6 +30,7 @@ import { Route as MarketIndexRouteImport } from './routes/market.index'
 import { Route as ScriptsSlugRouteImport } from './routes/scripts.$slug'
 import { Route as OrdersIdRouteImport } from './routes/orders.$id'
 import { Route as MarketSlugRouteImport } from './routes/market.$slug'
+import { Route as ExecutorsSlugRouteImport } from './routes/executors.$slug'
 import { Route as CheckoutSuccessRouteImport } from './routes/checkout.success'
 import { Route as MarketOrdersIdRouteImport } from './routes/market.orders.$id'
 
@@ -138,6 +139,11 @@ const MarketSlugRoute = MarketSlugRouteImport.update({
   path: '/market/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ExecutorsSlugRoute = ExecutorsSlugRouteImport.update({
+  id: '/$slug',
+  path: '/$slug',
+  getParentRoute: () => ExecutorsRoute,
+} as any)
 const CheckoutSuccessRoute = CheckoutSuccessRouteImport.update({
   id: '/success',
   path: '/success',
@@ -157,7 +163,7 @@ export interface FileRoutesByFullPath {
   '/checkout': typeof CheckoutRouteWithChildren
   '/community': typeof CommunityRoute
   '/dashboard': typeof DashboardRoute
-  '/executors': typeof ExecutorsRoute
+  '/executors': typeof ExecutorsRouteWithChildren
   '/kyc': typeof KycRoute
   '/points': typeof PointsRoute
   '/premium': typeof PremiumRoute
@@ -167,6 +173,7 @@ export interface FileRoutesByFullPath {
   '/tickets': typeof TicketsRoute
   '/wallet': typeof WalletRoute
   '/checkout/success': typeof CheckoutSuccessRoute
+  '/executors/$slug': typeof ExecutorsSlugRoute
   '/market/$slug': typeof MarketSlugRoute
   '/orders/$id': typeof OrdersIdRoute
   '/scripts/$slug': typeof ScriptsSlugRoute
@@ -182,7 +189,7 @@ export interface FileRoutesByTo {
   '/checkout': typeof CheckoutRouteWithChildren
   '/community': typeof CommunityRoute
   '/dashboard': typeof DashboardRoute
-  '/executors': typeof ExecutorsRoute
+  '/executors': typeof ExecutorsRouteWithChildren
   '/kyc': typeof KycRoute
   '/points': typeof PointsRoute
   '/premium': typeof PremiumRoute
@@ -192,6 +199,7 @@ export interface FileRoutesByTo {
   '/tickets': typeof TicketsRoute
   '/wallet': typeof WalletRoute
   '/checkout/success': typeof CheckoutSuccessRoute
+  '/executors/$slug': typeof ExecutorsSlugRoute
   '/market/$slug': typeof MarketSlugRoute
   '/orders/$id': typeof OrdersIdRoute
   '/scripts/$slug': typeof ScriptsSlugRoute
@@ -208,7 +216,7 @@ export interface FileRoutesById {
   '/checkout': typeof CheckoutRouteWithChildren
   '/community': typeof CommunityRoute
   '/dashboard': typeof DashboardRoute
-  '/executors': typeof ExecutorsRoute
+  '/executors': typeof ExecutorsRouteWithChildren
   '/kyc': typeof KycRoute
   '/points': typeof PointsRoute
   '/premium': typeof PremiumRoute
@@ -218,6 +226,7 @@ export interface FileRoutesById {
   '/tickets': typeof TicketsRoute
   '/wallet': typeof WalletRoute
   '/checkout/success': typeof CheckoutSuccessRoute
+  '/executors/$slug': typeof ExecutorsSlugRoute
   '/market/$slug': typeof MarketSlugRoute
   '/orders/$id': typeof OrdersIdRoute
   '/scripts/$slug': typeof ScriptsSlugRoute
@@ -245,6 +254,7 @@ export interface FileRouteTypes {
     | '/tickets'
     | '/wallet'
     | '/checkout/success'
+    | '/executors/$slug'
     | '/market/$slug'
     | '/orders/$id'
     | '/scripts/$slug'
@@ -270,6 +280,7 @@ export interface FileRouteTypes {
     | '/tickets'
     | '/wallet'
     | '/checkout/success'
+    | '/executors/$slug'
     | '/market/$slug'
     | '/orders/$id'
     | '/scripts/$slug'
@@ -295,6 +306,7 @@ export interface FileRouteTypes {
     | '/tickets'
     | '/wallet'
     | '/checkout/success'
+    | '/executors/$slug'
     | '/market/$slug'
     | '/orders/$id'
     | '/scripts/$slug'
@@ -311,7 +323,7 @@ export interface RootRouteChildren {
   CheckoutRoute: typeof CheckoutRouteWithChildren
   CommunityRoute: typeof CommunityRoute
   DashboardRoute: typeof DashboardRoute
-  ExecutorsRoute: typeof ExecutorsRoute
+  ExecutorsRoute: typeof ExecutorsRouteWithChildren
   KycRoute: typeof KycRoute
   PointsRoute: typeof PointsRoute
   PremiumRoute: typeof PremiumRoute
@@ -477,6 +489,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MarketSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/executors/$slug': {
+      id: '/executors/$slug'
+      path: '/$slug'
+      fullPath: '/executors/$slug'
+      preLoaderRoute: typeof ExecutorsSlugRouteImport
+      parentRoute: typeof ExecutorsRoute
+    }
     '/checkout/success': {
       id: '/checkout/success'
       path: '/success'
@@ -506,6 +525,18 @@ const CheckoutRouteWithChildren = CheckoutRoute._addFileChildren(
   CheckoutRouteChildren,
 )
 
+interface ExecutorsRouteChildren {
+  ExecutorsSlugRoute: typeof ExecutorsSlugRoute
+}
+
+const ExecutorsRouteChildren: ExecutorsRouteChildren = {
+  ExecutorsSlugRoute: ExecutorsSlugRoute,
+}
+
+const ExecutorsRouteWithChildren = ExecutorsRoute._addFileChildren(
+  ExecutorsRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
@@ -514,7 +545,7 @@ const rootRouteChildren: RootRouteChildren = {
   CheckoutRoute: CheckoutRouteWithChildren,
   CommunityRoute: CommunityRoute,
   DashboardRoute: DashboardRoute,
-  ExecutorsRoute: ExecutorsRoute,
+  ExecutorsRoute: ExecutorsRouteWithChildren,
   KycRoute: KycRoute,
   PointsRoute: PointsRoute,
   PremiumRoute: PremiumRoute,

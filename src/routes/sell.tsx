@@ -242,7 +242,7 @@ function SellerProfileTab() {
                   Verificação
                   {(payProfile as any)?.is_trusted_seller && (
                     <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 border-0 text-[10px] flex items-center gap-1">
-                      <Star className="h-3 w-3" /> Trusted
+                      <Star className="h-3 w-3" /> Confiável
                     </Badge>
                   )}
                 </div>
@@ -280,7 +280,7 @@ function SellerProfileTab() {
                 <div className="flex justify-between"><span>Comissão</span><span className="text-green-500">6%</span></div>
                 <div className="flex justify-between"><span>Hold de liberação</span><span className="text-green-500">7 dias</span></div>
                 {(payProfile as any)?.is_trusted_seller && (
-                  <div className="flex justify-between"><span>Status</span><span className="text-amber-500">Vendedor Trusted</span></div>
+                  <div className="flex justify-between"><span>Status</span><span className="text-amber-500">Vendedor Confiável</span></div>
                 )}
               </>
             ) : sProfile?.verification_status === "pending" ? (
@@ -354,7 +354,7 @@ function SellerProfileTab() {
             </div>
             <p className="text-[10px] text-muted-foreground">
               Quanto mais você participa, mais pontos acumula. Pontos altos aumentam sua
-              reputação e confiança na plataforma, destravando o selo <strong className="text-amber-500">Trusted Seller</strong>
+              reputação e confiança na plataforma, destravando o selo <strong className="text-amber-500">Vendedor Confiável</strong>
               e benefícios exclusivos.
               <Link to="/points" className="text-sky-400 hover:underline ml-1">Ver ranking</Link>
             </p>

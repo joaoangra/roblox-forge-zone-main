@@ -24,6 +24,7 @@ import {
   MessageSquare,
   Send,
   Plus,
+  Cpu,
   Trash2,
   Check,
   X,
@@ -49,6 +50,7 @@ import {
   ExternalLink,
   ThumbsUp,
   ThumbsDown,
+  Save,
 } from "lucide-react";
 
 export const Route = createFileRoute("/admin")({
@@ -74,6 +76,7 @@ function AdminPage() {
       {tab === "disputes" && <DisputesTab />}
       {tab === "finance" && <FinanceTab />}
       {tab === "shop" && <ShopTab />}
+      {tab === "executores" && <ExecutorsTab />}
       {tab === "settings" && <SettingsTab />}
       {tab === "technical" && <TechnicalTab />}
       {tab === "relatorios" && <RelatoriosTab />}
@@ -2671,5 +2674,293 @@ function StatusBadge({ status }: { status: string }) {
     <Badge variant="outline" className={`text-[10px] ${c}`}>
       {status}
     </Badge>
+  );
+}
+
+// ============ EXECUTORES TAB (ADMIN) ============
+function ExecutorsTab() {
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState<any | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState<Record<string, any>>({});
+  const [saving, setSaving] = useState(false);
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["admin-executors"],
+    queryFn: async () => adminApi<{ executors: any[] }>("list-executors"),
+  });
+
+  function resetForm(data?: any) {
+    setFormData({
+      name: data?.name ?? "",
+      slug: data?.slug ?? "",
+      description: data?.description ?? "",
+      long_description: data?.long_description ?? "",
+      download_url: data?.download_url ?? "",
+      image_url: data?.image_url ?? "",
+      price_brl: data?.price_brl ?? 0,
+      is_free: data?.is_free ?? true,
+      status: data?.status ?? "offline",
+      security_status: data?.security_status ?? "undetected",
+      safety_level: data?.safety_level ?? "safe",
+      detection_status: data?.detection_status ?? "undetected",
+      is_recommended: data?.is_recommended ?? false,
+      version: data?.version ?? "",
+      key_system: data?.key_system ?? false,
+      official_site: data?.official_site ?? "",
+      discord_url: data?.discord_url ?? "",
+      github_url: data?.github_url ?? "",
+      tutorial_url: data?.tutorial_url ?? "",
+      developer: data?.developer ?? "",
+      execution_method: data?.execution_method ?? "",
+      requirements: data?.requirements ?? "",
+      platform: (data?.platform ?? ["Windows"]).join(", "),
+      supported_games: (data?.supported_games ?? []).join(", "),
+      features: (data?.features ?? []).join(", "),
+      badges: (data?.badges ?? []).join(", "),
+      trust_score: data?.trust_score ?? 0,
+      downloads_json: data?.downloads_json ?? [],
+    });
+  }
+
+  function openNew() { resetForm(); setEditing(null); setShowForm(true); }
+  function openEdit(e: any) { resetForm(e); setEditing(e); setShowForm(true); }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const body: Record<string, any> = {
+        ...formData,
+        platform: formData.platform ? formData.platform.split(",").map((s: string) => s.trim()).filter(Boolean) : ["Windows"],
+        supported_games: formData.supported_games ? formData.supported_games.split(",").map((s: string) => s.trim()).filter(Boolean) : [],
+        features: formData.features ? formData.features.split(",").map((s: string) => s.trim()).filter(Boolean) : [],
+        badges: formData.badges ? formData.badges.split(",").map((s: string) => s.trim()).filter(Boolean) : [],
+      };
+      if (editing) {
+        body.id = editing.id;
+        await adminApi("update-executor", body);
+        toast.success("Executor atualizado!");
+      } else {
+        await adminApi("create-executor", body);
+        toast.success("Executor criado!");
+      }
+      setShowForm(false);
+      setEditing(null);
+      refetch();
+      qc.invalidateQueries({ queryKey: ["executors"] });
+    } catch (err: any) {
+      toast.error(err.message ?? "Erro ao salvar");
+    }
+    setSaving(false);
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Tem certeza?")) return;
+    try {
+      await adminApi("delete-executor", { id });
+      toast.success("Executor removido");
+      refetch();
+      qc.invalidateQueries({ queryKey: ["executors"] });
+    } catch (err: any) {
+      toast.error(err.message ?? "Erro");
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold">Gerenciar Executores</h2>
+        <Button size="sm" onClick={openNew} className="gap-1.5"><Plus className="h-4 w-4" /> Novo Executor</Button>
+      </div>
+
+      {showForm && (
+        <Card className="border-white/10 bg-card/50">
+          <CardContent className="p-4 space-y-3">
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Nome</Label>
+                <Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs">Slug</Label>
+                <Input value={formData.slug} onChange={(e) => setFormData({ ...formData, slug: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs">URL Download</Label>
+                <Input value={formData.download_url} onChange={(e) => setFormData({ ...formData, download_url: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs">URL Imagem</Label>
+                <Input value={formData.image_url} onChange={(e) => setFormData({ ...formData, image_url: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs">Preço (BRL)</Label>
+                <Input type="number" value={formData.price_brl} onChange={(e) => setFormData({ ...formData, price_brl: Number(e.target.value) })} />
+              </div>
+              <div>
+                <Label className="text-xs">Confiança (0-100)</Label>
+                <Input type="number" value={formData.trust_score} onChange={(e) => setFormData({ ...formData, trust_score: Number(e.target.value) })} />
+              </div>
+              <div>
+                <Label className="text-xs">Versão</Label>
+                <Input value={formData.version} onChange={(e) => setFormData({ ...formData, version: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs">Desenvolvedor</Label>
+                <Input value={formData.developer} onChange={(e) => setFormData({ ...formData, developer: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs">Método de Execução</Label>
+                <Input value={formData.execution_method} onChange={(e) => setFormData({ ...formData, execution_method: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs">Site Oficial</Label>
+                <Input value={formData.official_site} onChange={(e) => setFormData({ ...formData, official_site: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs">Discord URL</Label>
+                <Input value={formData.discord_url} onChange={(e) => setFormData({ ...formData, discord_url: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs">GitHub URL</Label>
+                <Input value={formData.github_url} onChange={(e) => setFormData({ ...formData, github_url: e.target.value })} />
+              </div>
+              <div className="sm:col-span-2">
+                <Label className="text-xs">Tutorial URL</Label>
+                <Input value={formData.tutorial_url} onChange={(e) => setFormData({ ...formData, tutorial_url: e.target.value })} />
+              </div>
+              <div className="sm:col-span-2">
+                <Label className="text-xs">Descrição Curta</Label>
+                <Textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} rows={2} />
+              </div>
+              <div className="sm:col-span-2">
+                <Label className="text-xs">Descrição Longa</Label>
+                <Textarea value={formData.long_description} onChange={(e) => setFormData({ ...formData, long_description: e.target.value })} rows={3} />
+              </div>
+              <div className="sm:col-span-2">
+                <Label className="text-xs">Requisitos</Label>
+                <Textarea value={formData.requirements} onChange={(e) => setFormData({ ...formData, requirements: e.target.value })} rows={2} />
+              </div>
+              <div>
+                <Label className="text-xs">Plataformas (separadas por vírgula)</Label>
+                <Input value={formData.platform} onChange={(e) => setFormData({ ...formData, platform: e.target.value })} placeholder="Windows, Android, iOS, macOS" />
+              </div>
+              <div>
+                <Label className="text-xs">Games Suportados (separados por vírgula)</Label>
+                <Input value={formData.supported_games} onChange={(e) => setFormData({ ...formData, supported_games: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs">Features (separadas por vírgula)</Label>
+                <Input value={formData.features} onChange={(e) => setFormData({ ...formData, features: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs">Badges (separadas por vírgula)</Label>
+                <Input value={formData.badges} onChange={(e) => setFormData({ ...formData, badges: e.target.value })} placeholder="Melhor Gratuito, Mais Seguro" />
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-4 text-sm">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={formData.is_free} onChange={(e) => setFormData({ ...formData, is_free: e.target.checked })} />
+                Grátis
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={formData.key_system} onChange={(e) => setFormData({ ...formData, key_system: e.target.checked })} />
+                Sistema de Key
+              </label>
+            </div>
+            <div className="flex flex-wrap gap-4 text-sm">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={formData.is_recommended} onChange={(e) => setFormData({ ...formData, is_recommended: e.target.checked })} />
+                Recomendado
+              </label>
+            </div>
+            <div className="grid sm:grid-cols-3 gap-3">
+              <div>
+                <Label className="text-xs">Status</Label>
+                <select value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })} className="w-full h-9 rounded-md bg-white/5 border border-white/10 text-sm px-2">
+                  <option value="online">Online</option>
+                  <option value="unstable">Instável</option>
+                  <option value="offline">Offline</option>
+                </select>
+              </div>
+              <div>
+                <Label className="text-xs">Nível de Segurança</Label>
+                <select value={formData.safety_level} onChange={(e) => setFormData({ ...formData, safety_level: e.target.value })} className="w-full h-9 rounded-md bg-white/5 border border-white/10 text-sm px-2">
+                  <option value="safe">Seguro</option>
+                  <option value="medium">Médio</option>
+                  <option value="risky">Perigoso</option>
+                </select>
+              </div>
+              <div>
+                <Label className="text-xs">Status de Detecção</Label>
+                <select value={formData.detection_status} onChange={(e) => setFormData({ ...formData, detection_status: e.target.value })} className="w-full h-9 rounded-md bg-white/5 border border-white/10 text-sm px-2">
+                  <option value="undetected">Não Detectado</option>
+                  <option value="partial">Parcial</option>
+                  <option value="detected">Detectado</option>
+                </select>
+              </div>
+              <div>
+                <Label className="text-xs">Destaque</Label>
+                <select value={formData.is_featured ? "yes" : "no"} onChange={(e) => setFormData({ ...formData, is_featured: e.target.value === "yes" })} className="w-full h-9 rounded-md bg-white/5 border border-white/10 text-sm px-2">
+                  <option value="no">Não</option>
+                  <option value="yes">Sim</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Segurança (legado)</Label>
+                <select value={formData.security_status} onChange={(e) => setFormData({ ...formData, security_status: e.target.value })} className="w-full h-9 rounded-md bg-white/5 border border-white/10 text-sm px-2">
+                  <option value="undetected">Não Detectado</option>
+                  <option value="medium_risk">Médio Risco</option>
+                  <option value="detected">Detectado</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button onClick={handleSave} disabled={saving} className="gap-1.5">
+                {saving ? "Salvando..." : <Save className="h-4 w-4" />} {editing ? "Atualizar" : "Criar"}
+              </Button>
+              <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-14 rounded-lg bg-muted/40 animate-pulse" />)}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {data?.executors?.map((e: any) => (
+            <div key={e.id} className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-colors">
+              <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-primary/20 to-accent/20 grid place-items-center shrink-0 overflow-hidden">
+                {e.image_url ? <img src={e.image_url} alt="" className="h-full w-full object-cover" /> : <Cpu className="h-5 w-5 text-primary/60" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-sm">{e.name}</span>
+                  <Badge variant="outline" className="text-[10px]">{e.status}</Badge>
+                  <Badge variant="outline" className="text-[10px]">{e.security_status}</Badge>
+                  {e.is_featured && <Sparkles className="h-3 w-3 text-yellow-400" />}
+                </div>
+                <p className="text-xs text-muted-foreground truncate">{e.description ?? "Sem descrição"}</p>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <span className="text-xs text-muted-foreground">Confiança {e.trust_score}</span>
+              </div>
+              <div className="flex gap-1 shrink-0">
+                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => openEdit(e)}><Edit className="h-3.5 w-3.5" /></Button>
+                <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-400" onClick={() => handleDelete(e.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+              </div>
+            </div>
+          ))}
+          {(!data?.executors || data.executors.length === 0) && (
+            <div className="text-center py-8 text-muted-foreground text-sm">Nenhum executor cadastrado.</div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
